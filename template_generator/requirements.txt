@@ -1,0 +1,4 @@
+matplotlib
+pycairo
+Pillow
+gradio
