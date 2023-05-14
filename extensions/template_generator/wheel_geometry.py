@@ -77,8 +77,7 @@ class WheelTemplate(object):
     @property
     def bolt_circle_radius(self):
         return self.bolt_circle_diameter / 2.0
-        
-        
+
     def check_errors_in_geometry(self):
         """
         Check for all possible geometric contradictions in the template.
@@ -191,12 +190,15 @@ class WheelTemplate(object):
             "required_coverage_area": self.required_coverage_area,
             "canvas_size": self.canvas_size,
         }
-                
+
+
 class WheelTemplateRenderer:
-    DRAW_NUTS_AS_HUB_HOLES = True # True - The lug nuts will be produced as hollow circles during the filling of the hub ring.
-                                  #        This is the best option because it keeps the background color of the holes.
-                                  # False - The lug nuts will be rendered as white circles on top of the fully solid hub ring
-                                  
+    DRAW_NUTS_AS_HUB_HOLES = True
+    """
+    True - The lug nuts will be produced as hollow circles during the filling of the hub ring. 
+           This is the best option because it keeps the background color of the holes.
+    False - The lug nuts will be rendered as white circles on top of the fully solid hub ring.
+    """
     SCENE_RIM_MARGIN = 1.2 # How much to make the scene (The rendered space) larger than the wheel rim
     LUG_NUTS_INITIAL_ANGLE = 0.0
     SPOKES_INITIAL_ANGLE = 20.0
@@ -210,8 +212,8 @@ class WheelTemplateRenderer:
     def __init__(self, wt):
         assert isinstance(wt, WheelTemplate)
         self._wt = wt
-        self._ctx = None # Temporary cairo drawing context
-        self._err_parts = [] # Temporary list of wheel parts that have geometric errors and should be highlighted
+        self._ctx = None  # Temporary cairo drawing context
+        self._err_parts = []  # Temporary list of wheel parts that have geometric errors and should be highlighted
         
         # Both width and height of the scene, in inches. It is slightly larger than the wheel rim
         # This is unaffected by the canvas resolution and aspect ratio.
@@ -220,8 +222,7 @@ class WheelTemplateRenderer:
         self._canvas_w, self._canvas_h = self.canvas_size
         self._x_pixels_per_inch = self._canvas_w / self._scene_length
         self._y_pixels_per_inch = self._canvas_h / self._scene_length
-        
-        
+
     def __getattr__(self, key):
         return getattr(self._wt, key)
         
@@ -382,7 +383,8 @@ class WheelTemplateRenderer:
             dirpath = os.path.dirname(png)
             if not dirpath or os.path.isdir(dirpath):
                 open(png, "wb").write(bio.getvalue())
-                
+
+
 def produce_wheel_outputs(wt, svg_path, png_path, json_path):
     assert isinstance(wt, WheelTemplate)
     wt.validate_geometry()
