@@ -8,7 +8,6 @@ import sys
 from PIL import Image
 from cairo import SVGSurface, FillRule, Context
 
-
 class WheelTemplate(object):
     # Parts of the wheel
     RIM = 1
@@ -16,42 +15,59 @@ class WheelTemplate(object):
     LUG_NUTS = 3
     SPOKES = 4
     
-    def __init__(self, rim_diameter=17, rim_width=1, hub_diameter=5, hub_width=2,
-                 lug_nut_count=5, lug_nut_diameter=0.8, bolt_circle_diameter=2.5, 
-                 spoke_count=5, spoke_central_angle=20, required_coverage_area=0.5, canvas_size=(512, 512)):
+    # Definition of all arguments and their default values
+    ALL_ARGS = dict(
+        rim_diameter=17,            # float, inch ["]
+        rim_width=1,                # float, inch ["]
+        hub_diameter=5,             # float, inch ["]
+        hub_width=2,                # float, inch ["]
+        lug_nut_count=5,            # int
+        lug_nut_diameter=0.8,       # float, inch ["]
+        bolt_circle_diameter=2.5,   # float, inch ["], Distance between wheel center and lug nut center
+        spoke_count=5,              # int, Divided evenly along the bolt circle
+        spoke_central_angle=10,     # float, Degrees (pie slice width)
+        required_coverage_area=0.5, # float, Solid area out of the total wheel area
+        canvas_size=(512, 512)      # set (x-size, y-size), in pixels
+    )
+    
+    def __init__(self, *args, **kwargs):
         """
-
-        @param rim_diameter: float, inch ["]
-        @param rim_width: float, inch ["]
-        @param hub_diameter: float, inch ["]
-        @param hub_width: float, inch ["]
-        @param lug_nut_count: int
-        @param lug_nut_diameter: float, inch ["]
-        @param bolt_circle_diameter: float, inch ["]
-        @param spoke_count: int
-        @param spoke_central_angle: float, Degrees (pie slice width)
-        @param required_coverage_area: float, solid area out of the total wheel area
-        @param canvas_size: set (x-size, y-size) in pixels
+        Params are as defined by ALL_ARGS
         """
-        # Very basic sanity check of arguments
-        for value in [rim_diameter, rim_width, hub_diameter, hub_width, 
-                      lug_nut_count, lug_nut_diameter, bolt_circle_diameter,
-                      spoke_count, spoke_central_angle, required_coverage_area, 
-                      canvas_size[0], canvas_size[1]]:
-            assert value > 0, "All values must be positive"
-        assert required_coverage_area <= 1.0, "coverage area must be in [0, 1]"
-            
-        self.rim_diameter = rim_diameter  # inch ["]
-        self.rim_width = rim_width  # inch ["]
-        self.hub_diameter = hub_diameter  # inch ["]
-        self.hub_width = hub_width  # inch ["]
-        self.lug_nut_count = lug_nut_count
-        self.lug_nut_diameter = lug_nut_diameter  # inch ["]
-        self.bolt_circle_diameter = bolt_circle_diameter  # inch ["]. Distance between wheel center and lug nut center
-        self.spoke_count = spoke_count  # Divided evenly along the bolt circle
-        self.spoke_central_angle = spoke_central_angle  # Degrees (pie slice width)
-        self.required_coverage_area = required_coverage_area  # solid area out of the total wheel area
-        self.canvas_size = canvas_size  # in pixels
+        # Go over arguments, assign defaults where missing, and do very basic sanity checks
+        self._dict = {}
+        for i, (arg, default_value) in enumerate(self.ALL_ARGS.items()):
+            ivalue = None
+            if len(args) > i:
+                ivalue = args[i]
+            kwvalue = kwargs.get(arg, None)
+            if ivalue is None:
+                if kwvalue is None:
+                    # Not given, use default
+                    value = default_value
+                else:
+                    # Given as keyword argument
+                    value = kwvalue
+            elif kwvalue is None:
+                # Given as positional argument
+                value = ivalue
+            else:
+                # Given both as positional and keyword argument,
+                # so raise an exception just like python would in this case
+                raise TypeError("got multiple values for argument '%s'" % arg)
+                
+            if arg == "canvas_size":
+                w, h = value
+                if not (w > 0 and h > 0):
+                    raise Exception("Canvas width/height must be positive")
+            elif arg == "required_coverage_area":
+                if not (0 <= value <= 1.0):
+                    raise Exception("Required coverage area must be in range [0, 1]")
+            elif not (value > 0):
+                raise Exception("Argument '%s' must be positive" % arg)
+                
+            self._dict[arg] = value
+            setattr(self, arg, value)
         
     @property
     def rim_radius(self):
@@ -176,19 +192,7 @@ class WheelTemplate(object):
         return res
         
     def to_dict(self):
-        return {
-            "rim_diameter": self.rim_diameter,
-            "rim_width": self.rim_width,
-            "hub_diameter": self.hub_diameter,
-            "hub_width": self.hub_width,
-            "lug_nut_count": self.lug_nut_count,
-            "lug_nut_diameter": self.lug_nut_diameter,
-            "bolt_circle_diameter": self.bolt_circle_diameter,
-            "spoke_count": self.spoke_count,
-            "spoke_central_angle": self.spoke_central_angle,
-            "required_coverage_area": self.required_coverage_area,
-            "canvas_size": self.canvas_size,
-        }
+        return dict(self._dict)
 
 
 class WheelTemplateRenderer:
@@ -209,7 +213,7 @@ class WheelTemplateRenderer:
     ERROR_COLOR = RED
 
     def __init__(self, wt):
-        assert isinstance(wt, WheelTemplate)
+        assert isinstance(wt, WheelTemplate), "'wt' must be instance of WheelTemplate'"
         self._wt = wt
         self._ctx = None  # Temporary cairo drawing context
         self._err_parts = []  # Temporary list of wheel parts that have geometric errors and should be highlighted
@@ -385,7 +389,7 @@ class WheelTemplateRenderer:
 
 
 def produce_wheel_outputs(wt, svg_path, png_path, json_path):
-    assert isinstance(wt, WheelTemplate)
+    assert isinstance(wt, WheelTemplate), "'wt' must be instance of WheelTemplate'"
     wt.validate_geometry()
     renderer = WheelTemplateRenderer(wt)
     renderer.generate_svg(svg_path, png=png_path)
@@ -397,6 +401,18 @@ def produce_wheel_outputs(wt, svg_path, png_path, json_path):
     open(json_path, "w").write(json.dumps(cfg, indent=4))     
     return cfg
     
+def load_wheel_template_from_json(cfg_data):
+    try:
+        if isinstance(cfg_data, bytes):
+            cfg_data = cfg_data.decode()
+        cfg = json.loads(cfg_data)
+    except Exception as e:
+        raise Exception("Error parsing as JSON data: %s" % str(e)) from None
+        
+    return WheelTemplate(**cfg["specs"])
+    
+def load_wheel_template_from_json_file(fpath):
+    return load_wheel_template_from_json(open(fpath, "r"))
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
