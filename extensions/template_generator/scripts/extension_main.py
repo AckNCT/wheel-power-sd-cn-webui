@@ -51,6 +51,33 @@ def on_generate_final_wheel(wt, design_inputs):
     design_inputs.get("creativity")
     design_inputs.get("render_quality")
     
+    
+    # ====== sample ======
+    
+    from PIL import Image
+    import random
+
+    # Define the size of the square image
+    image_size = 256
+
+    # Create a new image with a white background
+    image = Image.new("RGB", (image_size, image_size), "white")
+    pixels = image.load()
+
+    # Add random noise to each pixel in the image
+    for i in range(image_size):
+        for j in range(image_size):
+            # Generate random RGB values for each pixel
+            red = random.randint(0, 255)
+            green = random.randint(0, 255)
+            blue = random.randint(0, 255)
+            pixels[i, j] = (red, green, blue)
+
+
+    # ====== end of sample ======
+            
+    return image
+    
 
 gradio_ui.init_cfg(data_path, 
                    os.path.join(data_path, "generated_wheel_templates"), 

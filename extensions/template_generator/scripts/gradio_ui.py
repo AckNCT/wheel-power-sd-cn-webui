@@ -175,10 +175,10 @@ def on_generate_final_wheel(*inputs):
         if geo_err_msg:
             raise Exception(geo_err_msg)
     except Exception as e:
-        return make_ui_output_msg(err="Error with template: %s" % str(e))
+        return [gr.update()] + make_ui_output_msg(err="Error with template: %s" % str(e))
         
     if g_cb_generate_wheel is None:
-        return
+        return [gr.update() for i in range(3)]
         
     DESIGN_INPUT_NAMES = ["prog_proj", "model_year", "author", "tags", "name_plate", "sub_model",
                            "prompt",
@@ -187,13 +187,13 @@ def on_generate_final_wheel(*inputs):
                            "batch_size", "creativity", "render_quality"]
     try:
         design_input_dict = {DESIGN_INPUT_NAMES[i]: value for i, value in enumerate(design_inputs)}
-        g_cb_generate_wheel(wt, design_input_dict)
+        designed_image = g_cb_generate_wheel(wt, design_input_dict)
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return make_ui_output_msg(err="Error with image renderer: %s" % str(e))
+        return [gr.update()] + make_ui_output_msg(err="Error with image renderer: %s" % str(e))
         
-    return make_ui_output_msg(success="Cool!")
+    return [designed_image] + make_ui_output_msg(success="Cool!")
 
 def init_gradio_ui_v1(standalone=False):
     # Create a default wheel template for initial UI state
@@ -333,6 +333,9 @@ def init_gradio_ui_v2(standalone=False):
                         # logo_image = gr.Image(os.path.join(g_img_dir_path, "ford_logo.jpg"), interactive=False)
                         logo_image = gr_create_image_from_file(os.path.join(g_img_dir_path, "wheel_power_logo.jpg"))
                         final_generate_btn = gr.Button("Generate", variant="primary")
+                        designed_image = gr.Image(interactive=False)
+                        designed_image.style(width=350, height=350)
+                        
 
         template_inputs = [
             live_update_switch,
@@ -359,8 +362,8 @@ def init_gradio_ui_v2(standalone=False):
                 # we don't need to watch these
                 continue
             inp.change(fn=on_generate_wheel_template_live, inputs=template_inputs, outputs=all_outputs)                                  
-                                  
-                                  
+
+
         # For final image generation
         final_inputs = [
             prog_proj, model_year, author, tags, name_plate, sub_model,
@@ -370,7 +373,8 @@ def init_gradio_ui_v2(standalone=False):
             batch_size, creativity, render_quality
         ]
                                   
-        final_generate_btn.click(fn=on_generate_final_wheel, inputs=template_inputs[1:] + final_inputs, outputs=output_msgs)
+        final_generate_btn.click(fn=on_generate_final_wheel, inputs=template_inputs[1:] + final_inputs, 
+                                 outputs=[designed_image, *output_msgs])
 
         return ui        
 
