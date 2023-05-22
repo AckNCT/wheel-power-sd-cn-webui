@@ -17,15 +17,15 @@ class WheelTemplate(object):
     
     # Definition of all arguments and their default values
     ALL_ARGS = dict(
-        rim_diameter=17,            # float, inch ["]
-        rim_width=1,                # float, inch ["]
-        hub_diameter=5,             # float, inch ["]
-        hub_width=2,                # float, inch ["]
+        rim_diameter=17.0,          # float, inch ["]
+        rim_width=1.0,              # float, inch ["]
+        hub_diameter=5.0,           # float, inch ["]
+        hub_width=2.0,              # float, inch ["]
         lug_nut_count=5,            # int
         lug_nut_diameter=0.8,       # float, inch ["]
         bolt_circle_diameter=2.5,   # float, inch ["], Distance between wheel center and lug nut center
         spoke_count=5,              # int, Divided evenly along the bolt circle
-        spoke_central_angle=10,     # float, Degrees (pie slice width)
+        spoke_central_angle=10.0,   # float, Degrees (pie slice width)
         required_coverage_area=0.5, # float, Solid area out of the total wheel area
         canvas_size=(512, 512)      # set (x-size, y-size), in pixels
     )

@@ -1,6 +1,7 @@
 import os
 import importlib
 from functools import partial
+import json
 
 from modules import script_callbacks
 from modules.paths import data_path
@@ -25,7 +26,7 @@ def _gradio_blocks_render_patch_use_child_css(self):
                 root_block.css += "\r\n" + self.css
             else:
                 root_block.css = self.css
-        
+
     return Blocks.render(self)
 
 def on_ui_tabs():
@@ -34,8 +35,22 @@ def on_ui_tabs():
     ui.render = partial(_gradio_blocks_render_patch_use_child_css, ui)
     return [(ui, "Wheel Power", "ford_template_generator_tab")]
     
-def on_generate_final_wheel():
-    pass
+def on_generate_final_wheel(wt, design_inputs):
+    print(json.dumps(design_inputs, indent=1))
+    design_inputs.get("prog_proj")
+    design_inputs.get("model_year")
+    design_inputs.get("author")
+    design_inputs.get("tags")
+    design_inputs.get("name_plate")
+    design_inputs.get("sub_model")
+    design_inputs.get("prompt")
+    design_inputs.get("opts1")
+    design_inputs.get("canvas_width")
+    design_inputs.get("canvas_height")
+    design_inputs.get("batch_size")
+    design_inputs.get("creativity")
+    design_inputs.get("render_quality")
+    
 
 gradio_ui.init_cfg(data_path, 
                    os.path.join(data_path, "generated_wheel_templates"), 

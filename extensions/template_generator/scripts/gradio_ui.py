@@ -167,13 +167,33 @@ def on_load_wheel_template(filedata):
     return [*outputs, *on_generate_wheel_template(False, *outputs)]
     
 def on_generate_final_wheel(*inputs):
-    if g_cb_generate_wheel is not None:
-        try:
-            g_cb_generate_wheel()
-        except:
-            raise
-            pass
-    return
+    # print(len(inputs), inputs)
+    template_inputs = inputs[:12]
+    design_inputs = inputs[12:]
+    try:
+        wt, geo_err_msg = create_wheel_template_from_ui_inputs(template_inputs)
+        if geo_err_msg:
+            raise Exception(geo_err_msg)
+    except Exception as e:
+        return make_ui_output_msg(err="Error with template: %s" % str(e))
+        
+    if g_cb_generate_wheel is None:
+        return
+        
+    DESIGN_INPUT_NAMES = ["prog_proj", "model_year", "author", "tags", "name_plate", "sub_model",
+                           "prompt",
+                           "opts1",
+                           "canvas_width", "canvas_height",
+                           "batch_size", "creativity", "render_quality"]
+    try:
+        design_input_dict = {DESIGN_INPUT_NAMES[i]: value for i, value in enumerate(design_inputs)}
+        g_cb_generate_wheel(wt, design_input_dict)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return make_ui_output_msg(err="Error with image renderer: %s" % str(e))
+        
+    return make_ui_output_msg(success="Cool!")
 
 def init_gradio_ui_v1(standalone=False):
     # Create a default wheel template for initial UI state
@@ -288,7 +308,6 @@ def init_gradio_ui_v2(standalone=False):
                 output_ok_textbox = gr.Textbox(show_label=False, visible=False, interactive=False,
                                                elem_classes="success-textbox")
                     
-
             with gr.Column():
                 with gr.Row(variant="compact").style(equal_height=False):
                     with gr.Column():
@@ -328,11 +347,11 @@ def init_gradio_ui_v2(standalone=False):
         all_outputs = [output_image, real_coverage_area, *output_msgs]
         live_update_switch.select(fn=on_live_update_toggled,
                                   inputs=template_inputs,
-                                  outputs=[save_template_btn, *all_outputs])
+                                  outputs=[make_template_btn, *all_outputs])
         make_template_btn.click(fn=on_generate_wheel_template, inputs=template_inputs, outputs=all_outputs)
         save_template_btn.click(fn=on_save_wheel_template, inputs=template_inputs, outputs=output_msgs)
         load_template_btn.upload(on_load_wheel_template, inputs=load_template_btn, 
-                                  outputs=[*template_inputs, output_image, real_coverage_area, *output_msgs])
+                                  outputs=[*(template_inputs[1:]), output_image, real_coverage_area, *output_msgs])
                                   
         # For live updates we need to register event handlers for changes of any input
         for inp in template_inputs:
@@ -344,13 +363,14 @@ def init_gradio_ui_v2(standalone=False):
                                   
         # For final image generation
         final_inputs = [
+            prog_proj, model_year, author, tags, name_plate, sub_model,
             prompt,
             opts1,
             canvas_width, canvas_height,
             batch_size, creativity, render_quality
         ]
                                   
-        final_generate_btn.click(fn=on_generate_final_wheel, inputs=final_inputs, outputs=[])
+        final_generate_btn.click(fn=on_generate_final_wheel, inputs=template_inputs[1:] + final_inputs, outputs=output_msgs)
 
         return ui        
 
