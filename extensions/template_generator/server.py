@@ -7,9 +7,6 @@ import time
 
 from wheel_geometry import WheelTemplate, WheelTemplateRenderer, produce_wheel_outputs
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-RESULTS_DIRS = os.path.join(BASE_DIR, "generated_wheels")
-
 CSS = '''
 .error-textbox textarea {
     background-color: #FFCCCB;
@@ -19,6 +16,14 @@ CSS = '''
 }
 '''
 
+g_base_dir_path = None
+g_output_dir_path = None
+
+def set_dirs(base_dir_path, output_dir_path):
+    global g_base_dir_path, g_output_dir_path
+    g_base_dir_path = base_dir_path
+    g_output_dir_path = output_dir_path
+    
 
 def create_wheel_template_from_ui_inputs(inputs):
     [rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count, spoke_angle,
@@ -93,7 +98,7 @@ def on_save(live_update, *inputs):
     try:
         # Separate date/time dir for each execution
         dirname = time.strftime("%Y_%m_%d_%H_%M_%S")
-        dirpath = os.path.join(RESULTS_DIRS, dirname)
+        dirpath = os.path.join(g_output_dir_path, dirname)
         os.makedirs(dirpath)
         png_fpath = os.path.join(dirpath, "wheel.png")
         svg_fpath = os.path.join(dirpath, "wheel.svg")
@@ -102,13 +107,11 @@ def on_save(live_update, *inputs):
     except Exception as e:
         return make_ui_output_msg(err="Error producing outputs: %s" % str(e))
 
-    return make_ui_output_msg(success="Outputs saved in %s" % os.path.relpath(dirpath, BASE_DIR))
+    return make_ui_output_msg(success="Outputs saved in %s" % os.path.relpath(dirpath, g_base_dir_path))
 
 
-def init_gradio_ui():
-    global g_ui
-
-    with gr.Blocks(css=CSS) as g_ui:
+def init_gradio_ui(**kwargs):
+    with gr.Blocks(css=CSS, **kwargs) as ui:
         with gr.Row():
             with gr.Column():
                 with gr.Row():
@@ -170,7 +173,10 @@ def init_gradio_ui():
                 continue
             inp.change(fn=on_generate_wheel_live, inputs=inputs, outputs=all_outputs)
 
+        return ui
 
 if __name__ == "__main__":
-    init_gradio_ui()
-    g_ui.launch()
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    OUTPUT_BASE_DIR = os.path.join(BASE_DIR, "generated_wheels")
+    set_dirs(BASE_DIR, OUTPUT_BASE_DIR)
+    init_gradio_ui().launch()

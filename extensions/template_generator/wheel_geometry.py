@@ -1,14 +1,13 @@
-# importing pycairo
-from cairo import SVGSurface, FillRule, Context
-import matplotlib.pyplot as plt
-from matplotlib.image import imread
 from math import radians, cos, sin, pi
 import os
-from PIL import Image
 from io import BytesIO
 import json
 import pprint
 import sys
+
+from PIL import Image
+from cairo import SVGSurface, FillRule, Context
+
 
 class WheelTemplate(object):
     # Parts of the wheel
@@ -400,6 +399,9 @@ def produce_wheel_outputs(wt, svg_path, png_path, json_path):
     
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    from matplotlib.image import imread
+
     kwargs = {}
     if len(sys.argv) > 1:
         cfg = json.load(open(sys.argv[1], "r"))
