@@ -166,7 +166,7 @@ def on_load_wheel_template(filedata):
             
     return [*outputs, *on_generate_wheel_template(False, *outputs)]
     
-def on_generate_final_wheel(*inputs):
+def on_generate_designed_wheel(*inputs):
     # print(len(inputs), inputs)
     template_inputs = inputs[:12]
     design_inputs = inputs[12:]
@@ -332,7 +332,10 @@ def init_gradio_ui_v2(standalone=False):
                     with gr.Column():
                         # logo_image = gr.Image(os.path.join(g_img_dir_path, "ford_logo.jpg"), interactive=False)
                         logo_image = gr_create_image_from_file(os.path.join(g_img_dir_path, "wheel_power_logo.jpg"))
-                        final_generate_btn = gr.Button("Generate", variant="primary")
+                        with gr.Row(variant="compact", elem_classes="image-buttons"):
+                            design_generate_btn = gr.Button("Generate", variant="primary")
+                            design_save_btn = gr.Button("Save")
+                            design_load_btn = gr.Button("Load")
                         designed_image = gr.Image(interactive=False)
                         designed_image.style(width=350, height=350)
                         
@@ -364,8 +367,8 @@ def init_gradio_ui_v2(standalone=False):
             inp.change(fn=on_generate_wheel_template_live, inputs=template_inputs, outputs=all_outputs)                                  
 
 
-        # For final image generation
-        final_inputs = [
+        # For designed image generation
+        design_inputs = [
             prog_proj, model_year, author, tags, name_plate, sub_model,
             prompt,
             opts1,
@@ -373,7 +376,7 @@ def init_gradio_ui_v2(standalone=False):
             batch_size, creativity, render_quality
         ]
                                   
-        final_generate_btn.click(fn=on_generate_final_wheel, inputs=template_inputs[1:] + final_inputs, 
+        design_generate_btn.click(fn=on_generate_designed_wheel, inputs=template_inputs[1:] + design_inputs, 
                                  outputs=[designed_image, *output_msgs])
 
         return ui        

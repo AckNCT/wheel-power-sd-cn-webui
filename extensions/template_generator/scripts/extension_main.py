@@ -35,7 +35,7 @@ def on_ui_tabs():
     ui.render = partial(_gradio_blocks_render_patch_use_child_css, ui)
     return [(ui, "Wheel Power", "ford_template_generator_tab")]
     
-def on_generate_final_wheel(wt, design_inputs):
+def on_generate_designed_wheel(wt, design_inputs):
     print(json.dumps(design_inputs, indent=1))
     design_inputs.get("prog_proj")
     design_inputs.get("model_year")
@@ -82,5 +82,5 @@ def on_generate_final_wheel(wt, design_inputs):
 gradio_ui.init_cfg(data_path, 
                    os.path.join(data_path, "generated_wheel_templates"), 
                    os.path.join(basedir(), "images"),
-                   on_generate_final_wheel)
+                   on_generate_designed_wheel)
 script_callbacks.on_ui_tabs(on_ui_tabs)
