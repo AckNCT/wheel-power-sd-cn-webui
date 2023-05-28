@@ -31,7 +31,7 @@ startup_timer.record("import torch")
 import gradio
 startup_timer.record("import gradio")
 
-import ldm.modules.encoders.modules
+# import ldm.modules.encoders.modules
 startup_timer.record("import ldm")
 
 from modules import extra_networks, ui_extra_networks_checkpoints

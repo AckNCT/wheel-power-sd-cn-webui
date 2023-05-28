@@ -8,10 +8,12 @@ import gradio as gr
 
 try:
     # For standalone mode
-    from wheel_geometry import WheelTemplate, WheelTemplateRenderer, produce_wheel_outputs, load_wheel_template_from_json
+    from wheel_geometry import WheelTemplate, WheelTemplateRenderer, produce_wheel_outputs, \
+        load_wheel_template_from_json
 except ImportError:
     # For 'webui' mode
-    from scripts.wheel_geometry import WheelTemplate, WheelTemplateRenderer, produce_wheel_outputs, load_wheel_template_from_json
+    from scripts.wheel_geometry import WheelTemplate, WheelTemplateRenderer, produce_wheel_outputs, \
+        load_wheel_template_from_json
 
 CSS = '''
 .error-textbox textarea {
@@ -39,22 +41,25 @@ g_output_dir_path = None
 g_img_dir_path = None
 g_cb_generate_wheel = None
 
+
 def init_cfg(base_dir_path, output_dir_path, img_dir_path, cb_generate_wheel):
     global g_base_dir_path, g_output_dir_path, g_img_dir_path, g_cb_generate_wheel
     g_base_dir_path = base_dir_path
     g_output_dir_path = output_dir_path
     g_img_dir_path = img_dir_path
     g_cb_generate_wheel = cb_generate_wheel
-    
+
+
 def gr_create_image_from_file(fpath):
     img_b64 = b64encode(open(fpath, "rb").read()).decode()
     return gr.HTML('<img src="data:image/jpeg;base64,%s" alt="">' % img_b64)
+
 
 def create_wheel_template_from_ui_inputs(inputs):
     if len(inputs) == 11:
         # V1
         (rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count, spoke_angle,
-        req_coverage_area, canvas_res_str) = inputs
+         req_coverage_area, canvas_res_str) = inputs
 
         try:
             width, height = re.match(r"(\d+)[xX ,.](\d+)", canvas_res_str.strip()).groups()
@@ -64,7 +69,7 @@ def create_wheel_template_from_ui_inputs(inputs):
     elif len(inputs) == 12:
         # V2
         (rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count, spoke_angle,
-        req_coverage_area, canvas_width, canvas_height) = inputs   
+         req_coverage_area, canvas_width, canvas_height) = inputs
         canvas_res = (canvas_width, canvas_height)
 
     req_coverage_area /= 100
@@ -97,7 +102,7 @@ def on_generate_wheel_template(live_update, *inputs):
         png_image = WheelTemplateRenderer(wt).generate_svg(png="PIL", color_errors=True)
         if not err_msg:
             coverage = wt.calc_areas()["coverage"]
-    except Exception as e:    
+    except Exception as e:
         err_msg = str(e) or str(type(e))
         png_image = gr.Image.update()
 
@@ -140,13 +145,15 @@ def on_save_wheel_template(live_update, *inputs):
         return make_ui_output_msg(err="Error producing outputs: %s" % str(e))
 
     return make_ui_output_msg(success="Outputs saved in '%s'" % os.path.relpath(dirpath, g_base_dir_path))
-    
+
+
 def on_load_wheel_template(filedata):
     try:
         wt = load_wheel_template_from_json(filedata)
     except Exception as e:
-        return [gr.update() for i in range(12 + 2)] + make_ui_output_msg(err="Error loading wheel template: %s" % str(e))
-    
+        return [gr.update() for i in range(12 + 2)] + make_ui_output_msg(
+            err="Error loading wheel template: %s" % str(e))
+
     # 12 outputs
     rim_diam = wt.rim_diameter
     rim_width = wt.rim_width
@@ -157,15 +164,17 @@ def on_load_wheel_template(filedata):
     bolt_circle_diam = wt.bolt_circle_diameter
     spoke_count = wt.spoke_count
     spoke_angle = wt.spoke_central_angle
-    req_coverage_area = wt.required_coverage_area * 100 # Expected here in %
+    req_coverage_area = wt.required_coverage_area * 100  # Expected here in %
     canvas_width = wt.canvas_size[0]
     canvas_height = wt.canvas_size[1]
-    
-    outputs = [rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count, spoke_angle,
-            req_coverage_area, canvas_width, canvas_height]
-            
+
+    outputs = [rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count,
+               spoke_angle,
+               req_coverage_area, canvas_width, canvas_height]
+
     return [*outputs, *on_generate_wheel_template(False, *outputs)]
-    
+
+
 def on_generate_designed_wheel(*inputs):
     # print(len(inputs), inputs)
     template_inputs = inputs[:12]
@@ -176,15 +185,15 @@ def on_generate_designed_wheel(*inputs):
             raise Exception(geo_err_msg)
     except Exception as e:
         return [gr.update()] + make_ui_output_msg(err="Error with template: %s" % str(e))
-        
+
     if g_cb_generate_wheel is None:
         return [gr.update() for i in range(3)]
-        
+
     DESIGN_INPUT_NAMES = ["prog_proj", "model_year", "author", "tags", "name_plate", "sub_model",
-                           "prompt",
-                           "opts1",
-                           "canvas_width", "canvas_height",
-                           "batch_size", "creativity", "render_quality"]
+                          "prompt",
+                          "opts1",
+                          "canvas_width", "canvas_height",
+                          "batch_size", "creativity", "render_quality"]
     try:
         design_input_dict = {DESIGN_INPUT_NAMES[i]: value for i, value in enumerate(design_inputs)}
         designed_image = g_cb_generate_wheel(wt, design_input_dict)
@@ -192,16 +201,17 @@ def on_generate_designed_wheel(*inputs):
         import traceback
         traceback.print_exc()
         return [gr.update()] + make_ui_output_msg(err="Error with image renderer: %s" % str(e))
-        
+
     return [designed_image] + make_ui_output_msg(success="Cool!")
+
 
 def init_gradio_ui_v1(standalone=False):
     # Create a default wheel template for initial UI state
     # TODO: Maybe load it from the most recent saved template
-    wt = WheelTemplate() 
+    wt = WheelTemplate()
     real_coverage_area = wt.calc_areas()["coverage"]
     initial_output_image = WheelTemplateRenderer(wt).generate_svg(png="PIL", color_errors=True)
-    
+
     with gr.Blocks(css=CSS, analytics_enabled=standalone) as ui:
         with gr.Row():
             with gr.Column():
@@ -229,7 +239,8 @@ def init_gradio_ui_v1(standalone=False):
                     spoke_angle = gr.Slider(5, 70, step=1, value=wt.spoke_central_angle, label='Spoke central angle')
 
                 with gr.Row():
-                    req_coverage_area = gr.Slider(0, 100, value=wt.required_coverage_area * 100, step=1, label='Requested coverage area [%]')
+                    req_coverage_area = gr.Slider(0, 100, value=wt.required_coverage_area * 100, step=1,
+                                                  label='Requested coverage area [%]')
                     real_coverage_area = gr.Slider(0, 100, value=real_coverage_area, step=0.1, interactive=False,
                                                    label='Actual coverage area [%]')
                     canvas_res = gr.Textbox(value="%d %d" % wt.canvas_size, label='Canvas resolution')
@@ -265,33 +276,40 @@ def init_gradio_ui_v1(standalone=False):
             inp.change(fn=on_generate_wheel_template_live, inputs=inputs, outputs=all_outputs)
 
         return ui
-        
+
+
 def init_gradio_ui_v2(standalone=False):
     # Create a default wheel template for initial UI state
     # TODO: Maybe load it from the most recent saved template
-    wt = WheelTemplate() 
+    wt = WheelTemplate()
     real_coverage_area = wt.calc_areas()["coverage"]
     initial_output_image = WheelTemplateRenderer(wt).generate_svg(png="PIL", color_errors=True)
-    
+
     with gr.Blocks(css=CSS, analytics_enabled=standalone) as ui:
         with gr.Row(variant="compact").style(equal_height=False):
             with gr.Column():
                 with gr.Row(variant="compact").style(equal_height=False):
                     with gr.Column():
-                        rim_diam = gr.Number(value=wt.rim_diameter, label='Rim diameter ["]', elem_classes="compact-input")
+                        rim_diam = gr.Number(value=wt.rim_diameter, label='Rim diameter ["]',
+                                             elem_classes="compact-input")
                         rim_width = gr.Number(value=wt.rim_width, label='Rim width ["]', elem_classes="compact-input")
-                        hub_diam = gr.Number(value=wt.hub_diameter, label='Hub diameter ["]', elem_classes="compact-input")
+                        hub_diam = gr.Number(value=wt.hub_diameter, label='Hub diameter ["]',
+                                             elem_classes="compact-input")
                         hub_width = gr.Number(value=wt.hub_width, label='Hub width ["]', elem_classes="compact-input")
-                        nut_diam = gr.Number(value=wt.lug_nut_diameter, label='Lug nut diameter ["]', elem_classes="compact-input")
-                        bolt_circle_diam = gr.Number(value=wt.bolt_circle_diameter, label='Bolt circle diameter ["]', elem_classes="compact-input")
-                        
+                        nut_diam = gr.Number(value=wt.lug_nut_diameter, label='Lug nut diameter ["]',
+                                             elem_classes="compact-input")
+                        bolt_circle_diam = gr.Number(value=wt.bolt_circle_diameter, label='Bolt circle diameter ["]',
+                                                     elem_classes="compact-input")
+
                     with gr.Column():
-                        spoke_angle = gr.Slider(5, 70, step=1, value=wt.spoke_central_angle, label='Spoke central angle')  
+                        spoke_angle = gr.Slider(5, 70, step=1, value=wt.spoke_central_angle,
+                                                label='Spoke central angle')
                         spoke_count = gr.Slider(3, 9, step=1, value=wt.spoke_count, label='Spoke count')
                         nut_count = gr.Slider(3, 9, step=1, value=wt.lug_nut_count, label='Lug nut count')
-                        req_coverage_area = gr.Slider(0, 100, value=wt.required_coverage_area, step=1, label='Requested coverage area [%]', visible=False)
+                        req_coverage_area = gr.Slider(0, 100, value=wt.required_coverage_area, step=1,
+                                                      label='Requested coverage area [%]', visible=False)
                         real_coverage_area = gr.Slider(0, 100, value=real_coverage_area, step=0.1, interactive=False,
-                                                        label='Actual coverage area [%]')
+                                                       label='Actual coverage area [%]')
                         with gr.Row(variant="compact").style():
                             live_update_switch = gr.Checkbox(value=False, label="Live preview")
                             make_template_btn = gr.Button("Preview template")
@@ -299,15 +317,16 @@ def init_gradio_ui_v2(standalone=False):
                 with gr.Row(variant="compact").style(equal_height=False):
                     output_image = gr.Image(initial_output_image, interactive=False)
                     output_image.style(width=400, height=400)
-                with gr.Row(variant="compact").style(equal_height=False):                    
-                    load_template_btn = gr.UploadButton("Load template", file_types=[".json"], file_count="single", type="bytes")
+                with gr.Row(variant="compact").style(equal_height=False):
+                    load_template_btn = gr.UploadButton("Load template", file_types=[".json"], file_count="single",
+                                                        type="bytes")
                     save_template_btn = gr.Button("Save template")
-                    
+
                 output_err_textbox = gr.Textbox(show_label=False, visible=False, interactive=False,
                                                 elem_classes="error-textbox")
                 output_ok_textbox = gr.Textbox(show_label=False, visible=False, interactive=False,
                                                elem_classes="success-textbox")
-                    
+
             with gr.Column():
                 with gr.Row(variant="compact").style(equal_height=False):
                     with gr.Column():
@@ -323,8 +342,10 @@ def init_gradio_ui_v2(standalone=False):
                     with gr.Column():
                         opts1 = gr.CheckboxGroup(["BEV", "Alloy", "Machining"], label="", info="")
                         opts2 = gr.CheckboxGroup(["reserved1", "reserved2", "reserved3"], label="", info="")
-                        canvas_width = gr.Number(value=wt.canvas_size[0], label='Output image width', elem_classes="compact-input")
-                        canvas_height = gr.Number(value=wt.canvas_size[1], label='Output image height', elem_classes="compact-input")
+                        canvas_width = gr.Number(value=wt.canvas_size[0], label='Output image width',
+                                                 elem_classes="compact-input")
+                        canvas_height = gr.Number(value=wt.canvas_size[1], label='Output image height',
+                                                  elem_classes="compact-input")
                         batch_size = gr.Slider(1, 50, step=1, value=20, label='Batch Size')
                         creativity = gr.Slider(1, 100, step=1, value=20, label='Creativity')
                         render_quality = gr.Slider(1, 100, step=1, value=20, label='Render quality (takes more time)')
@@ -338,7 +359,6 @@ def init_gradio_ui_v2(standalone=False):
                             design_load_btn = gr.Button("Load")
                         designed_image = gr.Image(interactive=False)
                         designed_image.style(width=350, height=350)
-                        
 
         template_inputs = [
             live_update_switch,
@@ -356,18 +376,17 @@ def init_gradio_ui_v2(standalone=False):
                                   outputs=[make_template_btn, *all_outputs])
         make_template_btn.click(fn=on_generate_wheel_template, inputs=template_inputs, outputs=all_outputs)
         save_template_btn.click(fn=on_save_wheel_template, inputs=template_inputs, outputs=output_msgs)
-        load_template_btn.upload(on_load_wheel_template, inputs=load_template_btn, 
-                                  outputs=[*(template_inputs[1:]), output_image, real_coverage_area, *output_msgs])
-                                  
+        load_template_btn.upload(on_load_wheel_template, inputs=load_template_btn,
+                                 outputs=[*(template_inputs[1:]), output_image, real_coverage_area, *output_msgs])
+
         # For live updates we need to register event handlers for changes of any input
         for inp in template_inputs:
             if inp is live_update_switch or inp is req_coverage_area:
                 # we don't need to watch these
                 continue
-            inp.change(fn=on_generate_wheel_template_live, inputs=template_inputs, outputs=all_outputs)                                  
+            inp.change(fn=on_generate_wheel_template_live, inputs=template_inputs, outputs=all_outputs)
 
-
-        # For designed image generation
+            # For designed image generation
         design_inputs = [
             prog_proj, model_year, author, tags, name_plate, sub_model,
             prompt,
@@ -375,11 +394,12 @@ def init_gradio_ui_v2(standalone=False):
             canvas_width, canvas_height,
             batch_size, creativity, render_quality
         ]
-                                  
-        design_generate_btn.click(fn=on_generate_designed_wheel, inputs=template_inputs[1:] + design_inputs, 
-                                 outputs=[designed_image, *output_msgs])
 
-        return ui        
+        design_generate_btn.click(fn=on_generate_designed_wheel, inputs=template_inputs[1:] + design_inputs,
+                                  outputs=[designed_image, *output_msgs])
+
+        return ui
+
 
 if __name__ == "__main__":
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -387,4 +407,4 @@ if __name__ == "__main__":
     IMG_DIR = os.path.join(BASE_DIR, "..", "images")
     init_cfg(BASE_DIR, OUTPUT_BASE_DIR, IMG_DIR, None)
     init_gradio_ui_v1(standalone=True).launch()
-    #init_gradio_ui_v2().launch()
+    # init_gradio_ui_v2().launch()
