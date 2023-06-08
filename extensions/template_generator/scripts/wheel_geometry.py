@@ -9,6 +9,7 @@ from PIL import Image
 from cairo import SVGSurface, FillRule, Context
 
 
+
 class WheelTemplate(object):
     # Parts of the wheel
     RIM = 1

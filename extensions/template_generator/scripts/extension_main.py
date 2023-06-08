@@ -133,7 +133,7 @@ def on_generate_designed_wheel(wt, design_inputs):
 
 
 gradio_ui.init_cfg(data_path,
-                   os.path.join(data_path, "outputs", "generated_wheel_templates"),
+                   os.path.join(data_path, "outputs", "generated_wheels"),
                    os.path.join(basedir(), "images"),
                    on_generate_designed_wheel)
 script_callbacks.on_ui_tabs(on_ui_tabs)
