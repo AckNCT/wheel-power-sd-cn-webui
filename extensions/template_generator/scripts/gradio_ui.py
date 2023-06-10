@@ -22,7 +22,7 @@ CSS = '''
     background-color: #FFCCCB;
 }
 .success-textbox textarea {
-    background-color: #CBFFCC;
+    background-color: black;
 }
 .compact-input input {
     width: 100px !important;
