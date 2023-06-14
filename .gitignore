@@ -35,3 +35,4 @@ notification.mp3
 /cache.json*
 /config_states/
 /extensions/template_generator/generated_wheels/
+/nohup.out

@@ -11,8 +11,8 @@ from modules import script_callbacks
 from modules.paths import data_path
 from modules.scripts import basedir
 
-from scripts import gradio_ui, wheel_geometry
-
+# from scripts import gradio_ui, wheel_geometry
+import gradio_ui, wheel_geometry
 # Must reload all our internal modules when the WebUI reloads, and in reverse dependency order!
 
 wheel_geometry = importlib.reload(wheel_geometry)
@@ -53,11 +53,13 @@ def on_generate_designed_wheel(wt, design_inputs):
     design_inputs.get("sub_model")
     prompt = design_inputs.get("prompt", "No entry sign")
     design_inputs.get("opts1")
+    design_inputs.get("opts2")
     height = design_inputs.get("canvas_width", 256)
     width = design_inputs.get("canvas_height", 256)
-    design_inputs.get("batch_size")
-    design_inputs.get("creativity")
+    batch_size = design_inputs.get("batch_size")
+    creativity = design_inputs.get("creativity")
     steps = design_inputs.get("render_quality", 20)
+    guidance = design_inputs.get("guidance")
 
     png_image = wheel_geometry.WheelTemplateRenderer(wt).generate_svg(png="bytes", color_errors=True)
     encoded_image = base64.b64encode(png_image).decode('utf-8')
@@ -68,22 +70,24 @@ def on_generate_designed_wheel(wt, design_inputs):
         "denoising_strength": 0,
         "firstphase_width": 0,
         "firstphase_height": 0,
-        "prompt": prompt,
+        "prompt": "%s %s" % (prompt, "alloy wheel design, automotive design, performance, suv, electric car wheel, "
+                                     "19”, 22”, velar, front view, dark background, clean image, automotive "
+                                     "photography, 50mm"),
         "styles": [],
         "seed": -1,
         "subseed": -1,
         "subseed_strength": 0,
         "seed_resize_from_h": -1,
         "seed_resize_from_w": -1,
-        "batch_size": 1,
+        "batch_size": batch_size,
         "n_iter": 1,
         "steps": steps,
-        "cfg_scale": 7,
+        "cfg_scale": creativity,
         "width": width,
         "height": height,
         "restore_faces": False,
         "tiling": False,
-        "negative_prompt": "",
+        "negative_prompt": "color, illustration, artistic",
         "eta": 0,
         "s_churn": 0,
         "s_tmax": 0,
@@ -97,6 +101,10 @@ def on_generate_designed_wheel(wt, design_inputs):
                         "input_image": encoded_image,
                         "module": "canny",
                         "model": "control_v11p_sd15_canny [d14c016b]",
+                        "guidance": guidance,
+                        "weight": 1.25,
+                        "threshold_a": 100,
+                        "threshold_b": 200,
                     }
                 ]
             }
