@@ -1,11 +1,13 @@
 import re
 import os
 import time
+import shutil
 # from functools import partial
 from base64 import b64encode, b64decode
 import json
 from io import BytesIO
-
+from ui import create_refresh_button
+from ui_components import ToolButton
 import gradio as gr
 
 try:
@@ -51,6 +53,9 @@ g_base_dir_path = None
 g_output_dir_path = None
 g_img_dir_path = None
 g_cb_generate_wheel = None
+
+refresh_symbol = '\U0001f504'  # 🔄
+save_style_symbol = '\U0001f4be'  # 💾
 
 
 def init_cfg(base_dir_path, output_dir_path, img_dir_path, cb_generate_wheel):
@@ -137,9 +142,13 @@ def on_live_update_toggled(live_update, *inputs):
         return [gr.Button.update(interactive=True), gr.Image.update(), gr.Slider.update()] + make_ui_no_output_msg()
 
 
+def refresh_saved_templates_list():
+    return sorted(os.listdir(os.path.join(g_output_dir_path, 'templates')), reverse=True)
+
+
 def on_save_wheel_template(live_update, *inputs):
     try:
-        wt, geo_err_msg = create_wheel_template_from_ui_inputs(inputs)
+        wt, geo_err_msg = create_wheel_template_from_ui_inputs(inputs[:len(inputs)-1])
         if geo_err_msg:
             raise Exception(geo_err_msg)
     except Exception as e:
@@ -147,7 +156,7 @@ def on_save_wheel_template(live_update, *inputs):
 
     try:
         # Separate date/time dir for each execution
-        dirname = time.strftime("%Y_%m_%d_%H_%M_%S")
+        dirname = "%s_%s" % ('_'.join(inputs[-1].split()), time.strftime("%Y_%m_%d_%H_%M_%S"))
         dirpath = os.path.join(g_output_dir_path, "templates", dirname)
         os.makedirs(dirpath)
         png_fpath = os.path.join(dirpath, "wheel.png")
@@ -182,6 +191,19 @@ def _wheel_template_to_ui_value_list(wt):
     return outputs
 
 
+def on_load_wheel_template_from_dropdown(selected_template_folder):
+    try:
+        template_json_filename = os.path.join(g_output_dir_path, 'templates', selected_template_folder, 'wheel.json')
+        with open(template_json_filename, 'rb') as template_json_handler:
+            filedata = template_json_handler.read()
+        wt = load_wheel_template_from_json(filedata)
+        outputs = _wheel_template_to_ui_value_list(wt)
+    except Exception as e:
+        return [gr.update() for i in range(NUM_TEMPLATE_INPUTS + 2)] + make_ui_output_msg(
+            err="Error loading wheel template: %s" % str(e))
+    return outputs + on_generate_wheel_template(False, *outputs)
+
+
 def on_load_wheel_template(filedata):
     try:
         wt = load_wheel_template_from_json(filedata)
@@ -191,6 +213,13 @@ def on_load_wheel_template(filedata):
             err="Error loading wheel template: %s" % str(e))
 
     return outputs + on_generate_wheel_template(False, *outputs)
+
+
+def on_upload_template_image(*inputs):
+    from PIL import Image
+    user_template_image = Image.fromarray(inputs[0], "RGB")
+    outputs = [False, 17, 1, 5, 2, 5, 1, 3, 5, 20, 0.5, 512, 512]
+    return outputs + [user_template_image, 0.5] + make_ui_output_msg(success="uploaded user template")
 
 
 def on_generate_designed_wheel(*inputs):
@@ -219,7 +248,7 @@ def on_generate_designed_wheel(*inputs):
     return [designed_image] + make_ui_output_msg(success="Cool!")
 
 
-def on_save_designed_wheel(designed_image, *inputs):
+def on_save_designed_wheel(designed_images, *inputs):
     template_inputs = inputs[:NUM_TEMPLATE_INPUTS]
     design_inputs = inputs[NUM_TEMPLATE_INPUTS:]
     try:
@@ -241,27 +270,31 @@ def on_save_designed_wheel(designed_image, *inputs):
         t_svg_fpath = os.path.join(dirpath, "template.svg")
         t_json_fpath = os.path.join(dirpath, "template.json")
         template_cfg = produce_wheel_outputs(wt, t_svg_fpath, t_png_fpath, t_json_fpath)
+        from PIL import Image
 
-        d_png_fpath = os.path.join(dirpath, "design.png")
-        d_json_fpath = os.path.join(dirpath, "design.json")
-        png_raw = None
-        png_raw_b64 = None
-        if designed_image is not None:
-            bio = BytesIO()
-            designed_image.save(bio, format="png")
-            png_raw = bio.getvalue()
-            png_raw_b64 = b64encode(png_raw).decode()
-        full_cfg = {
-            "template": template_cfg,
-            "design": {
-                "attr": attr_dict,
-                "render": render_dict,
-                "png_raw_b64": png_raw_b64
-            },
-        }
-        open(d_json_fpath, "w").write(json.dumps(full_cfg, indent=4))
-        if png_raw:
-            open(d_png_fpath, "wb").write(png_raw)
+        for index, image in enumerate(designed_images):
+            d_png_fpath = os.path.join(dirpath, "design_%s.png" % index)
+            d_json_fpath = os.path.join(dirpath, "design_%s.json" % index)
+            tmp_png_fname = image.get('name', None)
+            if tmp_png_fname is not None:
+                shutil.copy2(tmp_png_fname, d_png_fpath)
+                png_image = Image.open(d_png_fpath)
+                bio = BytesIO()
+                png_image.save(bio, format="png")
+                png_raw = bio.getvalue()
+                png_raw_b64 = b64encode(png_raw).decode()
+            else:
+                png_raw = None
+                png_raw_b64 = None
+            full_cfg = {
+                "template": template_cfg,
+                "design": {
+                    "attr": attr_dict,
+                    "render": render_dict,
+                    "png_raw_b64": png_raw_b64
+                },
+            }
+            open(d_json_fpath, "w").write(json.dumps(full_cfg, indent=4))
 
     except Exception as e:
         return make_ui_output_msg(err="Error producing outputs: %s" % str(e))
@@ -387,16 +420,13 @@ def init_gradio_ui_v2(standalone=False):
             with gr.Column():
                 with gr.Row(variant="compact").style(equal_height=False):
                     with gr.Column():
-                        rim_diam = gr.Number(value=wt.rim_diameter, label='Rim diameter ["]',
-                                             elem_classes="compact-input")
-                        rim_width = gr.Number(value=wt.rim_width, label='Rim width ["]', elem_classes="compact-input")
-                        hub_diam = gr.Number(value=wt.hub_diameter, label='Hub diameter ["]',
-                                             elem_classes="compact-input")
-                        hub_width = gr.Number(value=wt.hub_width, label='Hub width ["]', elem_classes="compact-input")
-                        nut_diam = gr.Number(value=wt.lug_nut_diameter, label='Lug nut diameter ["]',
-                                             elem_classes="compact-input")
-                        bolt_circle_diam = gr.Number(value=wt.bolt_circle_diameter, label='Bolt circle diameter ["]',
-                                                     elem_classes="compact-input")
+                        rim_diam = gr.Slider(10, 50, step=1, value=wt.rim_diameter, label='Rim diameter ["]')
+                        rim_width = gr.Slider(1, 49, step=1, value=wt.rim_width, label='Rim width ["]')
+                        hub_diam = gr.Slider(5, 48, step=1, value=wt.hub_diameter, label='Hub diameter ["]')
+                        hub_width = gr.Slider(1, 47, step=1, value=wt.hub_width, label='Hub width ["]')
+                        nut_diam = gr.Slider(1, 4, step=0.5, value=wt.lug_nut_diameter, label='Lug nut diameter ["]')
+                        bolt_circle_diam = gr.Slider(2, 40, step=1,
+                                                     value=wt.bolt_circle_diameter, label='Bolt circle diameter ["]')
 
                     with gr.Column():
                         spoke_angle = gr.Slider(5, 70, step=1, value=wt.spoke_central_angle,
@@ -412,12 +442,23 @@ def init_gradio_ui_v2(standalone=False):
                             make_template_btn = gr.Button("Preview template")
 
                 with gr.Row(variant="compact").style(equal_height=False):
-                    template_image = gr.Image(initial_template_image, interactive=False)
+                    template_image = gr.Image(initial_template_image, interactive=True)
                     template_image.style(width=400, height=400)
                 with gr.Row(variant="compact").style(equal_height=False):
-                    load_template_btn = gr.UploadButton("Load template", file_types=[".json"], file_count="single",
-                                                        type="bytes")
-                    save_template_btn = gr.Button("Save template")
+                    # load_template_btn = gr.UploadButton("Load template", file_types=[".json"], file_count="single",
+                    #                                     type="bytes")
+                    template_name = gr.Textbox(value="", label='Template Name', max_lines=1, show_label=True,
+                                               interactive=True)
+                    save_template_btn = ToolButton(value=save_style_symbol, elem_id='save_template_button')
+                    # save_template_btn = gr.Button("Save template", lable='Save Wheel Template', show_lable=True)
+                    saved_templates_list = sorted(os.listdir(os.path.join(g_output_dir_path, 'templates')),
+                                                  reverse=True)
+                    saved_templates = gr.Dropdown(label='Load Saved Template', multiselect=False, show_label=True,
+                                                  interactive=True, visible=True, choices=saved_templates_list,
+                                                  elem_id='saved_templates_dropdown')
+                    create_refresh_button(saved_templates, refresh_saved_templates_list,
+                                          refreshed_args=lambda: {"choices": refresh_saved_templates_list()},
+                                          elem_id='saved_templates_dropdown')
 
                 output_err_textbox = gr.Textbox(show_label=False, visible=False, interactive=False,
                                                 elem_classes="error-textbox")
@@ -438,15 +479,15 @@ def init_gradio_ui_v2(standalone=False):
                 with gr.Row(variant="compact").style(equal_height=False):
                     with gr.Column():
                         opts1 = gr.CheckboxGroup(["BEV", "Alloy", "Machining"], label="", info="")
-                        opts2 = gr.CheckboxGroup(["Invert input color", "reserved2", "reserved3"], label="", info="")
+                        opts2 = gr.CheckboxGroup(["Invert template color", "reserved2", "reserved3"], label="", info="")
                         canvas_width = gr.Number(value=wt.canvas_size[0], label='Output image width',
-                                                 elem_classes="compact-input")
+                                                 elem_classes="compact-input", minimum=64, maximum=512)
                         canvas_height = gr.Number(value=wt.canvas_size[1], label='Output image height',
-                                                  elem_classes="compact-input")
+                                                  elem_classes="compact-input", minimum=64, maximum=512)
                         batch_size = gr.Slider(1, 50, step=1, value=1, label='Batch Size')
-                        creativity = gr.Slider(1, 100, step=1, value=7, label='Creativity')
+                        creativity = gr.Slider(1, 30, step=1, value=7, label='Creativity')
                         render_quality = gr.Slider(1, 100, step=1, value=20, label='Render quality (takes more time)')
-                        guidance = gr.Slider(0, 0.38, step=0.01, value=0.2, label='Guidance')
+                        guidance = gr.Slider(0, 1, step=0.01, value=0.38, label='Guidance')
                     with gr.Column():
                         # logo_image = gr.Image(os.path.join(g_img_dir_path, "ford_logo.jpg"), interactive=False)
                         logo_image = gr_create_image_from_file(os.path.join(g_img_dir_path, "wheel_power_logo.jpg"))
@@ -455,7 +496,8 @@ def init_gradio_ui_v2(standalone=False):
                             load_design_btn = gr.UploadButton("Load", file_types=[".json"], file_count="single",
                                                               type="bytes")
                             save_design_btn = gr.Button("Save")
-                        designed_image = gr.Image(type="pil", interactive=True)
+                        designed_image = gr.Gallery(type="pil", interactive=True).style(columns=2)
+                        # designed_image = gr.Image(type="pil", interactive=True)
                         designed_image.style(width=350, height=350)
 
         template_inputs = [
@@ -474,9 +516,14 @@ def init_gradio_ui_v2(standalone=False):
                                   inputs=template_inputs,
                                   outputs=[make_template_btn] + all_outputs)
         make_template_btn.click(fn=on_generate_wheel_template, inputs=template_inputs, outputs=all_outputs)
-        save_template_btn.click(fn=on_save_wheel_template, inputs=template_inputs, outputs=output_msgs)
-        load_template_btn.upload(on_load_wheel_template, inputs=load_template_btn,
-                                 outputs=template_inputs[1:] + [template_image, real_coverage_area] + output_msgs)
+        save_template_btn.click(fn=on_save_wheel_template, inputs=template_inputs + [template_name],
+                                outputs=output_msgs)
+        # load_template_btn.upload(on_load_wheel_template, inputs=load_template_btn,
+        #                          outputs=template_inputs[1:] + [template_image, real_coverage_area] + output_msgs)
+        saved_templates.change(fn=on_load_wheel_template_from_dropdown, inputs=saved_templates,
+                               outputs=template_inputs[1:] + [template_image, real_coverage_area] + output_msgs)
+        template_image.upload(fn=on_upload_template_image, inputs=template_image,
+                              outputs=template_inputs + [template_image, real_coverage_area] + output_msgs)
 
         # For live updates we need to register event handlers for changes of any input
         for inp in template_inputs:

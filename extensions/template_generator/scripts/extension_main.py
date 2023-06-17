@@ -6,6 +6,7 @@ import requests
 import io
 import base64
 from PIL import Image
+import PIL.ImageOps
 
 from modules import script_callbacks
 from modules.paths import data_path
@@ -53,16 +54,23 @@ def on_generate_designed_wheel(wt, design_inputs):
     design_inputs.get("sub_model")
     prompt = design_inputs.get("prompt", "No entry sign")
     design_inputs.get("opts1")
-    design_inputs.get("opts2")
+    opts2 = design_inputs.get("opts2")
     height = design_inputs.get("canvas_width", 256)
     width = design_inputs.get("canvas_height", 256)
     batch_size = design_inputs.get("batch_size")
     creativity = design_inputs.get("creativity")
     steps = design_inputs.get("render_quality", 20)
     guidance = design_inputs.get("guidance")
-
+    if height == width:
+        processor_res = height
+    else:
+        processor_res = 512
     png_image = wheel_geometry.WheelTemplateRenderer(wt).generate_svg(png="bytes", color_errors=True)
-    encoded_image = base64.b64encode(png_image).decode('utf-8')
+    if 'Invert input color' in opts2:
+        inverted_template = PIL.ImageOps.invert(png_image)
+        encoded_image = base64.b64encode(inverted_template).decode('utf-8')
+    else:
+        encoded_image = base64.b64encode(png_image).decode('utf-8')
 
     url_txt2img = "http://localhost:7860/sdapi/v1/txt2img"
     simple_txt2img = {
@@ -105,6 +113,7 @@ def on_generate_designed_wheel(wt, design_inputs):
                         "weight": 1.25,
                         "threshold_a": 100,
                         "threshold_b": 200,
+                        "processor_res": processor_res
                     }
                 ]
             }
@@ -112,8 +121,12 @@ def on_generate_designed_wheel(wt, design_inputs):
     }
     res = requests.post(url_txt2img, json=simple_txt2img)
     r = res.json()
-    img = r['images'][0]
-    image = Image.open(io.BytesIO(base64.b64decode(img.split(",", 1)[0])))
+    images = list()
+    for img in r['images']:
+        images.append(Image.open(io.BytesIO(base64.b64decode(img.split(",", 1)[0]))))
+    # img = r['images'][0]
+    # image = Image.open(io.BytesIO(base64.b64decode(img.split(",", 1)[0])))
+
     # ====== sample ======
 
     # from PIL import Image
@@ -137,7 +150,7 @@ def on_generate_designed_wheel(wt, design_inputs):
 
     # ====== end of sample ======
 
-    return image
+    return images[:len(images)-1]
 
 
 gradio_ui.init_cfg(data_path,
