@@ -12,11 +12,12 @@ from modules import script_callbacks
 from modules.paths import data_path
 from modules.scripts import basedir
 
-from scripts import gradio_ui, wheel_geometry, image_utils
+from scripts import gradio_ui, wheel_geometry, image_utils, controlnet_extracts
 # import gradio_ui, wheel_geometry
 # Must reload all our internal modules when the WebUI reloads, and in reverse dependency order!
 
 image_utils = importlib.reload(image_utils)
+controlnet_extracts = importlib.reload(controlnet_extracts)
 wheel_geometry = importlib.reload(wheel_geometry)
 gradio_ui = importlib.reload(gradio_ui)
 
@@ -181,10 +182,7 @@ def test_create_random_images(template_wheel_img, n=1):
                 
         image.paste(template_wheel_img2, (0, 0, image_size, image_size))
         draw = ImageDraw.Draw(image) 
-          
-        # specified font size
-        font = ImageFont.truetype("arial.ttf", 15)
-          
+        font = ImageFont.truetype(os.path.join(BASE_DIR, "ariblk.ttf"), 15)
         from random import choice
         rand_text = "".join([choice("abcdefghijklmnopqrstuvwxyz0123456789") for i in range(15)])
           
@@ -195,9 +193,9 @@ def test_create_random_images(template_wheel_img, n=1):
 
 
 
-
+BASE_DIR = basedir()
 gradio_ui.init_cfg(data_path,
                    os.path.join(data_path, "outputs", "generated_wheels"),
-                   os.path.join(basedir(), "images"),
+                   os.path.join(BASE_DIR, "images"),
                    on_generate_designed_wheel)
 script_callbacks.on_ui_tabs(on_ui_tabs)

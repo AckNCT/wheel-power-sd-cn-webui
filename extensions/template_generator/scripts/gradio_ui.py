@@ -12,7 +12,6 @@ from operator import itemgetter
 
 from modules.ui import create_refresh_button, save_style_symbol
 from modules.ui_components import ToolButton, FormRow
-from modules.scripts import scripts_txt2img
 from modules.sd_samplers import samplers as sd_samplers
 import gradio as gr
 
@@ -21,84 +20,16 @@ try:
     from wheel_geometry import WheelTemplate, WheelTemplateRenderer, produce_wheel_outputs, \
         save_wheel_json, load_wheel_template_from_json
     from image_utils import image_file_as_png_bytes, pil_image_to_png_bytes
+    from controlnet_extracts import *
 except ImportError:
     # For 'webui' mode
     from scripts.wheel_geometry import WheelTemplate, WheelTemplateRenderer, produce_wheel_outputs, \
         save_wheel_json, load_wheel_template_from_json
     from scripts.image_utils import image_file_as_png_bytes, pil_image_to_png_bytes
+    from scripts.controlnet_extracts import *
 
-g_controlnet_modules = {}
-def get_controlnet_module(module_name):
-    if module_name in g_controlnet_modules:
-        return g_controlnet_modules[module_name]
-        
-    module_path = os.path.join("extensions", "sd-webui-controlnet", "scripts", "%s.py" % module_name)
-    for module in sys.modules.values():
-        mpath = getattr(module, "__file__", None)
-        if not mpath:
-            continue
-        if mpath.endswith(module_path):
-            g_controlnet_modules[module_name] = module
-            return module
-    
-    raise Exception("Couldn't find controlnet module '%s'" % module_name)
-    
-def get_controlnet_script():
-    for script in scripts_txt2img.scripts:
-        if script.__module__.lower() == "controlnet.py":
-            return script
-            
-    raise Exception("Couldn't find controlnet Script obj")
-    
-def controlnet_refresh_all_models(*inputs):
-    global_state = get_controlnet_module("global_state")
-    global_state.update_cn_models()
 
-    dd = inputs[0]
-    selected = dd if dd in global_state.cn_models else "None"
-    return gr.Dropdown.update(value=selected, choices=list(global_state.cn_models.keys()))    
-    
-def controlnet_build_sliders(module, pp):
-    self = get_controlnet_script()
-    cn_processor = get_controlnet_module("processor")
-    flag_preprocessor_resolution = cn_processor.flag_preprocessor_resolution
-    preprocessor_sliders_config = cn_processor.preprocessor_sliders_config
-    model_free_preprocessors = cn_processor.model_free_preprocessors
-    
-    
-    grs = []
-    module = self.get_module_basename(module)
-    if module not in preprocessor_sliders_config:
-        grs += [
-            gr.update(label=flag_preprocessor_resolution, value=512, minimum=64, maximum=2048, step=1, visible=not pp, interactive=not pp),
-            gr.update(visible=False, interactive=False),
-            gr.update(visible=False, interactive=False),
-            gr.update(visible=True)
-        ]
-    else:
-        for slider_config in preprocessor_sliders_config[module]:
-            if isinstance(slider_config, dict):
-                visible = True
-                if slider_config['name'] == flag_preprocessor_resolution:
-                    visible = not pp
-                grs.append(gr.update(
-                    label=slider_config['name'],
-                    value=slider_config['value'],
-                    minimum=slider_config['min'],
-                    maximum=slider_config['max'],
-                    step=slider_config['step'] if 'step' in slider_config else 1,
-                    visible=visible,
-                    interactive=visible))
-            else:
-                grs.append(gr.update(visible=False, interactive=False))
-        while len(grs) < 3:
-            grs.append(gr.update(visible=False, interactive=False))
-        grs.append(gr.update(visible=True))
-    if module in model_free_preprocessors:
-        grs += [gr.update(visible=False, value='None'), gr.update(visible=False)]
-    else:
-        grs += [gr.update(visible=True), gr.update(visible=True)]
-    return grs
+
     
 
 CSS = '''
@@ -140,9 +71,11 @@ DESIGN_ADV_RENDER_PARAMS = [
 ]
 DESIGN_ADV_CONTROLNET_RENDER_PARAMS = [
     "cn_enabled", "lowvram", "pixel_perfect",
+    "control_type",
     "module", "model",
     "weight", "guidance_start", "guidance_end",
     "processor_res", "threshold_a", "threshold_b",
+    "control_mode", "resize_mode",
 ]
 DESIGN_RENDER_PARAMS = DESIGN_BASE_RENDER_PARAMS + DESIGN_ADV_RENDER_PARAMS + DESIGN_ADV_CONTROLNET_RENDER_PARAMS
 
@@ -459,10 +392,14 @@ def on_load_designed_wheel(user_state, filedata):
     try:
         try:
             if isinstance(filedata, bytes):
+                if filedata.startswith(b"PK"):
+                    # It's a zip file that should contain design.json
+                    with ZipFile(BytesIO(filedata), "r") as z:
+                        filedata = z.read("design.json")
                 filedata = filedata.decode()
             full_cfg = json.loads(filedata)
         except Exception as e:
-            raise Exception("Error parsing as JSON data: %s" % str(e)) from None
+            raise Exception("Error parsing as JSON data or as ZIP file with design.json file: %s" % str(e)) from None
         template_specs = full_cfg["template_specs"]
         template_raw64 = full_cfg["template_raw_b64"]
         design_cfg = full_cfg["design"]
@@ -647,14 +584,14 @@ def init_gradio_ui_v2(standalone=False):
                         # steps = gr.Slider(1, 100, step=1, value=20, label='Render quality (takes more time)')
                         with FormRow():
                             sampler_index = gr.Dropdown(label='Sampling method', choices=[x.name for x in sd_samplers], value=sd_samplers[0].name)
-                            steps = gr.Slider(minimum=1, maximum=150, step=1, label="Sampling steps", value=20)
+                            steps = gr.Slider(minimum=1, maximum=150, step=1, label="Render quality", value=20)
 
                     with gr.Column():
                         # logo_image = gr.Image(os.path.join(g_img_dir_path, "ford_logo.jpg"), interactive=False)
                         logo_image = gr_create_image_from_file(os.path.join(g_img_dir_path, "wheel_power_logo.jpg"))
                         with gr.Row(variant="compact", elem_classes="image-buttons", equal_height=True):
                             design_generate_btn = gr.Button("Generate", variant="primary")
-                            load_design_btn = gr.UploadButton("Load", file_types=[".json"], file_count="single",
+                            load_design_btn = gr.UploadButton("Load", file_types=[".json", ".zip"], file_count="single",
                                                               type="bytes")
                             save_design_btn = gr.Button("Save")
                             # download_design_btn = gr.File(interactive=False, visible=False, \
@@ -663,21 +600,29 @@ def init_gradio_ui_v2(standalone=False):
                         designed_image = gr.Gallery(show_label=False).style(columns=2)
                         # designed_image = gr.Image(type="pil", interactive=True)
                         designed_image.style(width=350, height=350)
-                with gr.Accordion("More txt2img options"):                        
+                with gr.Accordion("More txt2img options", open=False):
                     neg_prompt = gr.Textbox(label="Negative prompt", show_label=False, lines=3, placeholder="Negative prompt")                        
-                with gr.Accordion("More ControlNet options"):
+                with gr.Accordion("More ControlNet options", open=False):
+                    global_state = controlnet_get_module("global_state")
+                    # cn = controlnet_get_script()
+                
                     with FormRow(elem_classes="checkboxes-row", variant="compact"):
                         cn_enabled = gr.Checkbox(label='Enable', value=True)
                         lowvram = gr.Checkbox(label='Low VRAM', value=False)
                         pixel_perfect = gr.Checkbox(label='Pixel Perfect', value=False)
                         # preprocessor_preview = gr.Checkbox(label='Allow Preview', value=False)
+                        
+                    with gr.Row(elem_classes="controlnet_control_type"):
+                        control_type = gr.Radio(
+                            list(controlnet_get_module_attr("processor", "preprocessor_filters").keys()),
+                            label=f"Control Type",
+                            value="All",
+                        )
                 
-                    with gr.Row():
-                        global_state = get_controlnet_module("global_state")
-                        cn = get_controlnet_script()
-                        module = gr.Dropdown(global_state.ui_preprocessor_keys, label=f"Preprocessor", value=None)
+                    with gr.Row():                        
+                        module = gr.Dropdown(global_state.ui_preprocessor_keys, label=f"Preprocessor", value="canny")
                         # trigger_preprocessor = ToolButton(value=trigger_symbol, visible=True, elem_id=f'{elem_id_tabname}_{tabname}_controlnet_trigger_preprocessor')
-                        model = gr.Dropdown(list(global_state.cn_models.keys()), label=f"Model", value=None)
+                        model = gr.Dropdown(list(global_state.cn_models.keys()), label=f"Model", value="control_v11p_sd15_canny [d14c016b]")
                         refresh_models = ToolButton(value=REFRESH_SYMBOL)
                         refresh_models.click(controlnet_refresh_all_models, model, model)
             
@@ -692,8 +637,26 @@ def init_gradio_ui_v2(standalone=False):
                         threshold_a = gr.Slider(label="Threshold A", value=64, minimum=64, maximum=1024, visible=False, interactive=False)
                         threshold_b = gr.Slider(label="Threshold B", value=64, minimum=64, maximum=1024, visible=False, interactive=False)
                         
-                    module.change(controlnet_build_sliders, inputs=[module, pixel_perfect], outputs=[processor_res, threshold_a, threshold_b, cn_advanced, model, refresh_models])
-                    pixel_perfect.change(controlnet_build_sliders, inputs=[module, pixel_perfect], outputs=[processor_res, threshold_a, threshold_b, cn_advanced, model, refresh_models])
+                    external_code = controlnet_get_module("external_code")
+                    control_mode = gr.Radio(
+                        choices=[e.value for e in external_code.ControlMode],
+                        value=external_code.ControlMode.BALANCED,
+                        label="Control Mode")
+
+                    resize_mode = gr.Radio(
+                        choices=[e.value for e in external_code.ResizeMode],
+                        value=external_code.ResizeMode.INNER_FIT,
+                        label="Resize Mode",
+                    )                        
+                        
+                    _outputs = [processor_res, threshold_a, threshold_b, cn_advanced, model, refresh_models]
+                    module.change(controlnet_build_sliders, inputs=[module, pixel_perfect], 
+                                        outputs=_outputs)
+                    pixel_perfect.change(controlnet_build_sliders, inputs=[module, pixel_perfect], 
+                                        outputs=_outputs)
+                    control_type.change(controlnet_filter_selected, inputs=[control_type, pixel_perfect],
+                                        outputs=[module, model, *_outputs])
+                                        
                         
                         
                 
