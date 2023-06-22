@@ -1,12 +1,16 @@
 from math import radians, cos, sin, pi
 import os
-from io import BytesIO
 import json
 import pprint
 import sys
-
-from PIL import Image
 from cairo import SVGSurface, FillRule, Context
+
+try:
+    # For standalone mode
+    from image_utils import cairo_svg_surface_to_png
+except ImportError:
+    # For 'webui' mode
+    from scripts.image_utils import cairo_svg_surface_to_png
 
 
 
@@ -213,13 +217,17 @@ class WheelTemplateRenderer:
 
     BLACK = (0.0, 0.0, 0.0)
     WHITE = (1.0, 1.0, 1.0)
+    GRAY = (0.5, 0.5, 0.5)
     RED = (1.0, 0.0, 0.0)
-    DEFAULT_COLOR = BLACK
+    DEFAULT_DRAW_COLOR = GRAY
     ERROR_COLOR = RED
 
     def __init__(self, wt):
         assert isinstance(wt, WheelTemplate), "'wt' must be instance of WheelTemplate'"
         self._wt = wt
+        self._draw_color = None
+        self._alpha_channel = None
+        
         self._ctx = None  # Temporary cairo drawing context
         self._err_parts = []  # Temporary list of wheel parts that have geometric errors and should be highlighted
 
@@ -241,8 +249,8 @@ class WheelTemplateRenderer:
             return None
 
     def _set_color(self, color=None):
-        color = color or self.DEFAULT_COLOR
-        self._ctx.set_source_rgb(*color)
+        color = color or self._draw_color
+        self._ctx.set_source_rgba(*color, 1.0)
 
     def _set_color_for_part(self, part):
         self._set_color(self._get_part_color(part))
@@ -334,7 +342,8 @@ class WheelTemplateRenderer:
             "spokes_initial_angle": self.SPOKES_INITIAL_ANGLE,
         }
 
-    def generate_svg(self, svg_fpath=None, png=None, color_errors=False):
+    def generate_svg(self, svg_fpath=None, png=None, color_errors=False,
+                     draw_color=None, alpha_channel=True):
         """
         Generate SVG representation of the wheel template, and optionally return PNG output.
         @param svg_fpath: path of output SVG file, or None
@@ -344,7 +353,12 @@ class WheelTemplateRenderer:
                     "bytes" - Raw PNG bytes
                     <file_path> - Save as PNG file instead of returning it
         @param color_errors: Whether to color wheel components that had geometric errors
+        @param draw_color: RGB-tuple of color of all solid shapes
+        @param alpha_channel: Only for the PNG - whether to keep the alpha channel
         """
+        self._draw_color = draw_color or self.DEFAULT_DRAW_COLOR
+        self._alpha_channel = alpha_channel
+        
         self._err_parts = []
         if color_errors:
             _error_strs, self._err_parts = self.check_errors_in_geometry()
@@ -377,27 +391,14 @@ class WheelTemplateRenderer:
         self._draw_spokes()
 
         # Create the output PNG if requested
-        if not png:
-            return
-
-        bio = BytesIO()
-        svg_surface.write_to_png(bio)
-        if png == "bytes" or png is bytes:
-            return bio.getvalue()
-        elif png.upper() == "PIL":
-            bio.seek(0)
-            return Image.open(bio)
-        elif png and isinstance(png, str):
-            dirpath = os.path.dirname(png)
-            if not dirpath or os.path.isdir(dirpath):
-                open(png, "wb").write(bio.getvalue())
+        return cairo_svg_surface_to_png(svg_surface, png, alpha_channel)
 
 
-def produce_wheel_outputs(wt, svg_path, png_path, json_path):
+def produce_wheel_outputs(wt, svg_path, png_path, json_path, **kwargs):
     assert isinstance(wt, WheelTemplate), "'wt' must be instance of WheelTemplate'"
     wt.validate_geometry()
     renderer = WheelTemplateRenderer(wt)
-    renderer.generate_svg(svg_path, png=png_path)
+    renderer.generate_svg(svg_path, png=png_path, **kwargs)
     cfg = {
         "specs": wt.to_dict(),
         "image": renderer.to_dict(),
@@ -405,7 +406,14 @@ def produce_wheel_outputs(wt, svg_path, png_path, json_path):
     }
     open(json_path, "w").write(json.dumps(cfg, indent=4))
     return cfg
-
+    
+def save_wheel_json(wt, json_path):
+    assert isinstance(wt, WheelTemplate), "'wt' must be instance of WheelTemplate'"
+    cfg = {
+        "specs": wt.to_dict(),
+    }
+    open(json_path, "w").write(json.dumps(cfg, indent=4))
+    return cfg
 
 def load_wheel_template_from_json(cfg_data):
     try:
@@ -421,7 +429,6 @@ def load_wheel_template_from_json(cfg_data):
 def load_wheel_template_from_json_file(fpath):
     return load_wheel_template_from_json(open(fpath, "r"))
 
-
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from matplotlib.image import imread
@@ -433,5 +440,6 @@ if __name__ == "__main__":
     wt = WheelTemplate(**kwargs)
     cfg = produce_wheel_outputs(wt, "test_wheel.svg", "test_wheel.png", "test_wheel.json")
     print("Coverage: %.1f%%" % cfg["geometry"]["coverage"])
-    plt.imshow(imread("test_wheel.png"))
+    im = imread("test_wheel.png")
+    plt.imshow(im)
     plt.show()

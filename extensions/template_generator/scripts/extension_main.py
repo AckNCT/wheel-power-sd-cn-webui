@@ -12,10 +12,11 @@ from modules import script_callbacks
 from modules.paths import data_path
 from modules.scripts import basedir
 
-# from scripts import gradio_ui, wheel_geometry
-import gradio_ui, wheel_geometry
+from scripts import gradio_ui, wheel_geometry, image_utils
+# import gradio_ui, wheel_geometry
 # Must reload all our internal modules when the WebUI reloads, and in reverse dependency order!
 
+image_utils = importlib.reload(image_utils)
 wheel_geometry = importlib.reload(wheel_geometry)
 gradio_ui = importlib.reload(gradio_ui)
 
@@ -44,33 +45,43 @@ def on_ui_tabs():
     return [(ui, "Wheel Power", "ford_template_generator_tab")]
 
 
-def on_generate_designed_wheel(wt, design_inputs):
+def on_generate_designed_wheel(template_wheel_img, design_inputs):    
     print(json.dumps(design_inputs, indent=1))
-    design_inputs.get("prog_proj")
-    design_inputs.get("model_year")
-    design_inputs.get("author")
-    design_inputs.get("tags")
-    design_inputs.get("name_plate")
-    design_inputs.get("sub_model")
+    
+    # Basic render params
     prompt = design_inputs.get("prompt", "No entry sign")
-    design_inputs.get("opts1")
-    opts2 = design_inputs.get("opts2")
+    opts1 = list(map(str.lower, design_inputs.get("opts1", [])))
+    opts2 = list(map(str.lower, design_inputs.get("opts2", [])))
     height = design_inputs.get("canvas_width", 256)
     width = design_inputs.get("canvas_height", 256)
     batch_size = design_inputs.get("batch_size")
     creativity = design_inputs.get("creativity")
-    steps = design_inputs.get("render_quality", 20)
-    guidance = design_inputs.get("guidance")
-    if height == width:
-        processor_res = height
-    else:
-        processor_res = 512
-    png_image = wheel_geometry.WheelTemplateRenderer(wt).generate_svg(png="bytes", color_errors=True)
-    if 'Invert input color' in opts2:
-        inverted_template = PIL.ImageOps.invert(png_image)
-        encoded_image = base64.b64encode(inverted_template).decode('utf-8')
-    else:
-        encoded_image = base64.b64encode(png_image).decode('utf-8')
+    
+    sampler_index = design_inputs.get("sampler_index", 0)
+    steps = design_inputs.get("steps", 20)
+    
+    # Advanced render params
+    neg_prompt = design_inputs.get("prompt", "No entry sign")    
+    
+    # Advanced ControlNet render params
+    cn_enabled = design_inputs.get("cn_enabled", True)
+    lowvram = design_inputs.get("lowvram", False)
+    pixel_perfect = design_inputs.get("pixel_perfect", False)
+    
+    module = design_inputs.get("module", None)
+    model = design_inputs.get("model", None)    
+    weight = design_inputs.get("weight", 1.0)
+    guidance_start = design_inputs.get("guidance_start", 0)
+    guidance_end = design_inputs.get("guidance_end", 1)
+    processor_res = design_inputs.get("processor_res", 512)
+    threshold_a = design_inputs.get("threshold_a", 64.0)
+    threshold_b = design_inputs.get("threshold_b", 64.0)
+        
+    if 'invert template color' in opts2:
+        template_wheel_img = PIL.ImageOps.invert(template_wheel_img)
+
+    template_wheel_img_raw = image_utils.pil_image_to_png_bytes(template_wheel_img)
+    template_wheel_img_b64 = base64.b64encode(template_wheel_img_raw).decode('utf-8')
 
     url_txt2img = "http://localhost:7860/sdapi/v1/txt2img"
     simple_txt2img = {
@@ -95,30 +106,45 @@ def on_generate_designed_wheel(wt, design_inputs):
         "height": height,
         "restore_faces": False,
         "tiling": False,
-        "negative_prompt": "color, illustration, artistic",
+        "negative_prompt": "%s %s" % (neg_prompt, "color, illustration, artistic"),
         "eta": 0,
         "s_churn": 0,
         "s_tmax": 0,
         "s_tmin": 0,
         "s_noise": 1,
-        "sampler_index": "Euler a",
+        "sampler_index": sampler_index,
         "alwayson_scripts": {
             "controlnet": {
                 "args": [
                     {
-                        "input_image": encoded_image,
-                        "module": "canny",
-                        "model": "control_v11p_sd15_canny [d14c016b]",
-                        "guidance": guidance,
-                        "weight": 1.25,
-                        "threshold_a": 100,
-                        "threshold_b": 200,
-                        "processor_res": processor_res
+                        "enabled": cn_enabled,
+                        "lowvram": lowvram,
+                        "pixel_perfect": pixel_perfect,
+                        
+                        "module": module,
+                        # "model": "control_v11p_sd15_canny [d14c016b]",
+                        "model": model,
+                        
+                        "guidance_start": guidance_start,
+                        "guidance_end": guidance_end,
+                        "weight": weight,
+                        
+                        "processor_res": processor_res,
+                        "threshold_a": threshold_a,
+                        "threshold_b": threshold_b,
+
+                        "control_mode": 0,
+                        
+                        "input_image": template_wheel_img_b64,                        
                     }
                 ]
             }
         }
     }
+    
+    if "mock" in opts2:
+        return test_create_random_images(template_wheel_img, batch_size)        
+    
     res = requests.post(url_txt2img, json=simple_txt2img)
     r = res.json()
     images = list()
@@ -126,31 +152,48 @@ def on_generate_designed_wheel(wt, design_inputs):
         images.append(Image.open(io.BytesIO(base64.b64decode(img.split(",", 1)[0]))))
     # img = r['images'][0]
     # image = Image.open(io.BytesIO(base64.b64decode(img.split(",", 1)[0])))
-
-    # ====== sample ======
-
-    # from PIL import Image
-    # import random
-    #
-    # # Define the size of the square image
-    # image_size = 256
-    #
-    # # Create a new image with a white background
-    # image = Image.new("RGB", (image_size, image_size), "white")
-    # pixels = image.load()
-    #
-    # # Add random noise to each pixel in the image
-    # for i in range(image_size):
-    #     for j in range(image_size):
-    #         # Generate random RGB values for each pixel
-    #         red = random.randint(0, 255)
-    #         green = random.randint(0, 255)
-    #         blue = random.randint(0, 255)
-    #         pixels[i, j] = (red, green, blue)
-
-    # ====== end of sample ======
-
     return images[:len(images)-1]
+
+def test_create_random_images(template_wheel_img, n=1):
+    # print(template_wheel_img)
+    from PIL import Image, ImageDraw, ImageFont
+    import random
+    
+    # Define the size of the square image
+    image_size = 256
+    
+    # Create a new image with a white background
+    images = []
+    template_wheel_img2 = template_wheel_img.resize((image_size, image_size))
+    for i in range(n):
+        image = Image.new("RGB", (image_size, image_size), "white")
+        images.append(image)
+        # pixels = image.load()
+        
+        # # Add random noise to each pixel in the image
+        # for i in range(image_size):
+            # for j in range(image_size):
+                # # Generate random RGB values for each pixel
+                # red = random.randint(0, 255)
+                # green = random.randint(0, 255)
+                # blue = random.randint(0, 255)
+                # pixels[i, j] = (red, green, blue)
+                
+        image.paste(template_wheel_img2, (0, 0, image_size, image_size))
+        draw = ImageDraw.Draw(image) 
+          
+        # specified font size
+        font = ImageFont.truetype("arial.ttf", 15)
+          
+        from random import choice
+        rand_text = "".join([choice("abcdefghijklmnopqrstuvwxyz0123456789") for i in range(15)])
+          
+        # drawing text size
+        draw.text((5, 5), "%d %s" % (i, rand_text), font=font, align="left", fill="red")
+
+    return images
+
+
 
 
 gradio_ui.init_cfg(data_path,
