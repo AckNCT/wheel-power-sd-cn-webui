@@ -110,7 +110,7 @@ def controlnet_filter_selected(k, pp):
         return [
             gr.Dropdown.update(value="none", choices=preprocessor_list),
             gr.Dropdown.update(value="None", choices=model_list),
-        ] + build_sliders("none", pp)
+        ] + controlnet_build_sliders("none", pp)
     filtered_preprocessor_list = [
         x
         for x in preprocessor_list

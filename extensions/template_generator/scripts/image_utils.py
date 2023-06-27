@@ -1,6 +1,7 @@
 from PIL import Image
 from io import BytesIO
 import os
+from base64 import b64encode, b64decode
 
 def pil_image_to_png_bytesio(im):
     bio = BytesIO()
@@ -46,3 +47,8 @@ def image_file_as_png_bytes(fpath):
     png_image.save(bio, format="png")
     png_raw = bio.getvalue()
     return png_raw
+    
+def image_b64_to_pil(image_b64):
+    if image_b64 is None:
+        return image_b64
+    return Image.open(BytesIO(b64decode(image_b64)))

@@ -45,12 +45,14 @@ def on_ui_tabs():
     ui.render = partial(_gradio_blocks_render_patch_use_child_css, ui)
     return [(ui, "Wheel Power", "ford_template_generator_tab")]
 
+def remove_newlines(s):
+    return s.replace("\r", "").replace("\n", "")
 
 def on_generate_designed_wheel(template_wheel_img, design_inputs):    
     print(json.dumps(design_inputs, indent=1))
     
     # Basic render params
-    prompt = design_inputs.get("prompt", "No entry sign")
+    prompt = remove_newlines(design_inputs.get("prompt", "No entry sign"))
     opts1 = list(map(str.lower, design_inputs.get("opts1", [])))
     opts2 = list(map(str.lower, design_inputs.get("opts2", [])))
     height = design_inputs.get("canvas_width", 256)
@@ -62,7 +64,9 @@ def on_generate_designed_wheel(template_wheel_img, design_inputs):
     steps = design_inputs.get("steps", 20)
     
     # Advanced render params
-    neg_prompt = design_inputs.get("prompt", "No entry sign")    
+    neg_prompt = remove_newlines(design_inputs.get("neg_prompt", "No entry sign"))
+    prompt_shadow = remove_newlines(design_inputs.get("prompt_shadow", ""))
+    neg_prompt_shadow = remove_newlines(design_inputs.get("neg_prompt_shadow", ""))
     
     # Advanced ControlNet render params
     cn_enabled = design_inputs.get("cn_enabled", True)
@@ -85,14 +89,12 @@ def on_generate_designed_wheel(template_wheel_img, design_inputs):
     template_wheel_img_b64 = base64.b64encode(template_wheel_img_raw).decode('utf-8')
 
     url_txt2img = "http://localhost:7860/sdapi/v1/txt2img"
-    simple_txt2img = {
+    txt2img_req = {
         "enable_hr": False,
         "denoising_strength": 0,
         "firstphase_width": 0,
         "firstphase_height": 0,
-        "prompt": "%s %s" % (prompt, "alloy wheel design, automotive design, performance, suv, electric car wheel, "
-                                     "19”, 22”, velar, front view, dark background, clean image, automotive "
-                                     "photography, 50mm"),
+        "prompt": "%s %s" % (prompt, prompt_shadow),
         "styles": [],
         "seed": -1,
         "subseed": -1,
@@ -107,7 +109,7 @@ def on_generate_designed_wheel(template_wheel_img, design_inputs):
         "height": height,
         "restore_faces": False,
         "tiling": False,
-        "negative_prompt": "%s %s" % (neg_prompt, "color, illustration, artistic"),
+        "negative_prompt": "%s %s" % (neg_prompt, neg_prompt_shadow),
         "eta": 0,
         "s_churn": 0,
         "s_tmax": 0,
@@ -143,10 +145,12 @@ def on_generate_designed_wheel(template_wheel_img, design_inputs):
         }
     }
     
+    print(json.dumps(txt2img_req, indent=1))
+    
     if "mock" in opts2:
         return test_create_random_images(template_wheel_img, batch_size)        
     
-    res = requests.post(url_txt2img, json=simple_txt2img)
+    res = requests.post(url_txt2img, json=txt2img_req)
     r = res.json()
     images = list()
     for img in r['images']:
@@ -194,7 +198,7 @@ def test_create_random_images(template_wheel_img, n=1):
 
 
 BASE_DIR = basedir()
-gradio_ui.init_cfg(data_path,
+gradio_ui.init_cfg(data_path, BASE_DIR,
                    os.path.join(data_path, "outputs", "generated_wheels"),
                    os.path.join(BASE_DIR, "images"),
                    on_generate_designed_wheel)
