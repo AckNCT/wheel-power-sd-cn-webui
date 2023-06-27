@@ -101,6 +101,7 @@ g_webui_dir_path = None # Base dir of the WebUI repository
 g_ext_dir_path = None # Base dir of this extension
 g_output_dir_path = None # Base dir for all outputs stored on server (Doesn't have to be inside g_webui_dir_path)
 g_user_default_design_json_path = None # Path to user controlled default design.json file
+g_base_default_design_json_path = None # Path to base default design.json file (readonly)
 g_img_dir_path = None # Dir for static images (e.g. Ford logo)
 g_cb_generate_wheel = None # Callback to invoke on generation of final designed wheel
 g_base_design = None # Base wheel design, containing all default values. This is NOT the default design that the user may set.
@@ -117,20 +118,24 @@ SAVE_STYLE_SYMBOL = '\U0001f4be'
 
 def init_cfg(webui_dir_path, ext_dir_path, output_dir_path, img_dir_path, cb_generate_wheel):
     global g_webui_dir_path, g_ext_dir_path, g_output_dir_path, g_img_dir_path, \
-           g_cb_generate_wheel, g_user_default_design_json_path
+           g_cb_generate_wheel, g_user_default_design_json_path, g_base_default_design_json_path
        
     g_webui_dir_path = webui_dir_path
     g_ext_dir_path = ext_dir_path
     g_output_dir_path = output_dir_path
     g_user_default_design_json_path = os.path.join(g_output_dir_path, DESIGNS_DIR_NAME, "user_default.json")
+    g_base_default_design_json_path = os.path.join(g_ext_dir_path, "base_design.json")
     g_img_dir_path = img_dir_path
     g_cb_generate_wheel = cb_generate_wheel
+    
+    if not os.path.isfile(g_user_default_design_json_path):
+        shutil.copy2(g_base_default_design_json_path, g_user_default_design_json_path)
     
 def get_base_wheel_design(make_copy=True):
     global g_base_design
     if g_base_design is None:
         # This file is the base and always exists, and cannot be modified by the user.  
-        g_base_design = json.load(open(os.path.join(g_ext_dir_path, "base_design.json")))
+        g_base_design = json.load(open(g_base_default_design_json_path))
     if make_copy:
         return copy.deepcopy(g_base_design)
     return g_base_design

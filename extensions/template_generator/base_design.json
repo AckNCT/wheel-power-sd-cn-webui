@@ -36,7 +36,7 @@
             "sampler_index": "Euler a",
             "steps": 20,
             "neg_prompt": "",
-            "prompt_shadow": "alloy wheel design, automotive design, performance, suv, electric car wheel, 19\\u201d, 22\\u201d, velar, front view, dark background, clean image, automotive photography, 50mm",
+            "prompt_shadow": "alloy wheel design, automotive design, performance, suv, electric car wheel, 19\u201d, 22\u201d, velar, front view, dark background, clean image, automotive photography, 50mm",
             "neg_prompt_shadow": "color, illustration, artistic",
             "cn_enabled": true,
             "lowvram": false,
