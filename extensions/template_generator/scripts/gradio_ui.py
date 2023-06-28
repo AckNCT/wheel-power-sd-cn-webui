@@ -613,16 +613,16 @@ def init_gradio_ui_v2(standalone=False):
             with gr.Column():
                 with gr.Row(variant="compact").style(equal_height=False):
                     with gr.Column():
-                        rim_diam = gr.Slider(10, 50, step=1, value=ts_cfg["rim_diameter"], label='Rim diameter ["]')
-                        rim_width = gr.Slider(1, 49, step=1, value=ts_cfg["rim_width"], label='Rim width ["]')
-                        hub_diam = gr.Slider(5, 48, step=1, value=ts_cfg["hub_diameter"], label='Hub diameter ["]')
-                        hub_width = gr.Slider(1, 47, step=1, value=ts_cfg["hub_width"], label='Hub width ["]')
-                        nut_diam = gr.Slider(1, 4, step=0.5, value=ts_cfg["lug_nut_diameter"], label='Lug nut diameter ["]')
-                        bolt_circle_diam = gr.Slider(2, 40, step=1,
+                        rim_diam = gr.Slider(10, 50, step=0.1, value=ts_cfg["rim_diameter"], label='Rim diameter ["]')
+                        rim_width = gr.Slider(0.1, 49, step=0.1, value=ts_cfg["rim_width"], label='Rim width ["]')
+                        hub_diam = gr.Slider(5, 48, step=0.1, value=ts_cfg["hub_diameter"], label='Hub diameter ["]')
+                        hub_width = gr.Slider(1, 47, step=0.1, value=ts_cfg["hub_width"], label='Hub width ["]')
+                        nut_diam = gr.Slider(1, 4, step=0.01, value=ts_cfg["lug_nut_diameter"], label='Lug nut diameter ["]')
+                        bolt_circle_diam = gr.Slider(2, 40, step=0.1,
                                                      value=ts_cfg["bolt_circle_diameter"], label='Bolt circle diameter ["]')
 
                     with gr.Column():
-                        spoke_angle = gr.Slider(5, 70, step=1, value=ts_cfg["spoke_central_angle"],
+                        spoke_angle = gr.Slider(5, 70, step=0.1, value=ts_cfg["spoke_central_angle"],
                                                 label='Spoke central angle')
                         spoke_count = gr.Slider(3, 9, step=1, value=ts_cfg["spoke_count"], label='Spoke count')
                         nut_count = gr.Slider(3, 9, step=1, value=ts_cfg["lug_nut_count"], label='Lug nut count')
