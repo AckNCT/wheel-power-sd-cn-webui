@@ -23,17 +23,19 @@ class WheelTemplate(object):
 
     # Definition of all arguments and their default values
     ALL_ARGS = dict(
-        rim_diameter=17.0,  # float, inch ["]
-        rim_width=1.0,  # float, inch ["]
-        hub_diameter=5.0,  # float, inch ["]
-        hub_width=2.0,  # float, inch ["]
-        lug_nut_count=5,  # int
-        lug_nut_diameter=0.8,  # float, inch ["]
-        bolt_circle_diameter=2.5,  # float, inch ["], Distance between wheel center and lug nut center
-        spoke_count=5,  # int, Divided evenly along the bolt circle
-        spoke_central_angle=10.0,  # float, Degrees (pie slice width)
-        required_coverage_area=0.5,  # float, Solid area out of the total wheel area
-        canvas_size=(512, 512)  # set (x-size, y-size), in pixels
+        rim_diameter=17.0,          # float: inch ["]
+        rim_width=1.0,              # float: inch ["]
+        hub_diameter=5.0,           # float: inch ["]
+        hub_width=2.0,              # float: inch ["]
+        lug_nut_count=5,            # int
+        lug_nut_diameter=0.8,       # float: inch ["]
+        lug_nuts_init_angle=0.0,    # float: degrees (CCW from X-axis)
+        bolt_circle_diameter=2.5,   # float: inch ["], Distance between wheel center and lug nut center
+        spoke_count=5,              # int: divided evenly along the bolt circle
+        spoke_central_angle=10.0,   # float: degrees (pie slice width)
+        spokes_init_angle=0.0,     # float: degrees (CCW from X-axis)
+        required_coverage_area=0.5, # float: Solid area out of the total wheel area
+        canvas_size=(512, 512)      # tuple (x-size, y-size), in pixels
     )
 
     def __init__(self, *args, **kwargs):
@@ -69,6 +71,9 @@ class WheelTemplate(object):
             elif arg == "required_coverage_area":
                 if not (0 <= value <= 1.0):
                     raise Exception("Required coverage area must be in range [0, 1]")
+            elif arg in ["lug_nuts_init_angle", "spokes_init_angle"]:
+                if not (0 <= value <= 360.0):
+                    raise Exception("'%s' must be in range [0, 360]" % arg)
             elif not (value > 0):
                 raise Exception("Argument '%s' must be positive" % arg)
 
@@ -212,8 +217,8 @@ class WheelTemplateRenderer:
     False - The lug nuts will be rendered as white circles on top of the fully solid hub ring.
     """
     SCENE_RIM_MARGIN = 1.2  # How much to make the scene (The rendered space) larger than the wheel rim
-    LUG_NUTS_INITIAL_ANGLE = 0.0
-    SPOKES_INITIAL_ANGLE = 20.0
+    # LUG_NUTS_INITIAL_ANGLE = 0.0
+    # SPOKES_INITIAL_ANGLE = 20.0
 
     BLACK = (0.0, 0.0, 0.0)
     WHITE = (1.0, 1.0, 1.0)
@@ -270,7 +275,7 @@ class WheelTemplateRenderer:
     def _prepare_lug_nuts_path(self):
         ctx = self._ctx
         for i in range(self.lug_nut_count):
-            angle = radians(self.LUG_NUTS_INITIAL_ANGLE + i * 360.0 / self.lug_nut_count)
+            angle = -radians(self.lug_nuts_init_angle + i * 360.0 / self.lug_nut_count)
             nut_x = self.bolt_circle_radius * cos(angle)
             nut_y = self.bolt_circle_radius * sin(angle)
             ctx.new_sub_path()
@@ -299,7 +304,7 @@ class WheelTemplateRenderer:
     def _draw_spokes(self):
         self._set_color_for_part(self.SPOKES)
         for i in range(self.spoke_count):
-            self._draw_spoke(self.SPOKES_INITIAL_ANGLE + i * 360.0 / self.spoke_count)
+            self._draw_spoke(-(self.spokes_init_angle + i * 360.0 / self.spoke_count))
         self._set_color()
 
     def _draw_rim(self):
@@ -338,8 +343,6 @@ class WheelTemplateRenderer:
             "x_pixels_per_inch": round(self._x_pixels_per_inch, 3),
             "y_pixels_per_inch": round(self._y_pixels_per_inch, 3),
             "scene_rim_margin": self.SCENE_RIM_MARGIN,
-            "lug_nuts_initial_angle": self.LUG_NUTS_INITIAL_ANGLE,
-            "spokes_initial_angle": self.SPOKES_INITIAL_ANGLE,
         }
 
     def generate_svg(self, svg_fpath=None, png=None, color_errors=False,

@@ -2,6 +2,7 @@ import re
 import os
 import time
 # from functools import partial
+import shutil
 from base64 import b64encode, b64decode
 import json
 from io import BytesIO
@@ -194,7 +195,7 @@ def create_wheel_template_from_ui_inputs(inputs):
         # V1
         raise NotImplementedError("Obsolete, move to init_gradio_ui_v2")
 
-        # (rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count, spoke_angle,
+        # (rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count, spoke_central_angle,
         # req_coverage_area, canvas_res_str) = inputs
 
         # try:
@@ -204,13 +205,15 @@ def create_wheel_template_from_ui_inputs(inputs):
         # raise Exception("Invalid canvas resolution. Must be '<width> <height>'") from None
     elif len(inputs) == NUM_TEMPLATE_INPUTS:
         # V2
-        (rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count, spoke_angle,
-         req_coverage_area, canvas_width, canvas_height) = inputs
+        (rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, nut0_angle, 
+         bolt_circle_diam, spoke_count, spoke_central_angle, spoke0_angle, req_coverage_area, 
+         canvas_width, canvas_height) = inputs
         canvas_res = (canvas_width, canvas_height)
 
     req_coverage_area /= 100
-    wt = WheelTemplate(rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam,
-                       spoke_count, spoke_angle, req_coverage_area, canvas_res)
+    wt = WheelTemplate(rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, nut0_angle,
+                       bolt_circle_diam, spoke_count, spoke_central_angle, spoke0_angle, 
+                       req_coverage_area, canvas_res)
     try:
         wt.validate_geometry()
         geo_err_str = ""
@@ -245,9 +248,9 @@ def on_generate_wheel_template(user_state, live_update, *inputs):
     user_state["custom_template"] = False
     return [user_state, png_image, coverage] + make_ui_output_msg(err=err_msg)
 
-
 def on_generate_wheel_template_live(user_state, live_update, *inputs):
     if not live_update or user_state.get("custom_template", False):
+        # Do nothing
         return [user_state, gr.Image.update(), gr.Slider.update()] + make_ui_no_output_msg()
     return on_generate_wheel_template(user_state, live_update, *inputs)
 
@@ -308,15 +311,17 @@ def _wheel_template_to_ui_value_list(wt):
     hub_width = wt.hub_width
     nut_count = wt.lug_nut_count
     nut_diam = wt.lug_nut_diameter
+    nut0_angle = wt.lug_nuts_init_angle
     bolt_circle_diam = wt.bolt_circle_diameter
     spoke_count = wt.spoke_count
-    spoke_angle = wt.spoke_central_angle
+    spoke_central_angle = wt.spoke_central_angle
+    spoke0_angle = wt.spokes_init_angle
     req_coverage_area = wt.required_coverage_area * 100  # Expected here in %
     canvas_width = wt.canvas_size[0]
     canvas_height = wt.canvas_size[1]
 
-    outputs = [rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, bolt_circle_diam, spoke_count,
-               spoke_angle,
+    outputs = [rim_diam, rim_width, hub_diam, hub_width, nut_count, nut_diam, nut0_angle, 
+               bolt_circle_diam, spoke_count, spoke_central_angle, spoke0_angle,
                req_coverage_area, canvas_width, canvas_height]
 
     return outputs
@@ -548,7 +553,7 @@ def init_gradio_ui_v1(standalone=False):
 
     # with gr.Row():
     # spoke_count = gr.Slider(3, 9, step=1, value=wt.spoke_count, label='Spoke count')
-    # spoke_angle = gr.Slider(5, 70, step=1, value=wt.spoke_central_angle, label='Spoke central angle')
+    # spoke_central_angle = gr.Slider(5, 70, step=1, value=wt.spoke_central_angle, label='Spoke central angle')
 
     # with gr.Row():
     # req_coverage_area = gr.Slider(0, 100, value=wt.required_coverage_area * 100, step=1,
@@ -562,7 +567,7 @@ def init_gradio_ui_v1(standalone=False):
     # rim_diam, rim_width,
     # hub_diam, hub_width,
     # nut_count, nut_diam, bolt_circle_diam,
-    # spoke_count, spoke_angle,
+    # spoke_count, spoke_central_angle,
     # req_coverage_area, canvas_res
     # ]
 
@@ -605,10 +610,14 @@ def init_gradio_ui_v2(standalone=False):
     da_cfg = design_cfg["attr"]
     dr_cfg = design_cfg["render"]
     initial_template_image = image_b64_to_pil(full_cfg["template_raw_b64"])
-    
+    is_custom_template = True
+    if initial_template_image is None:
+        wt = WheelTemplate()
+        initial_template_image = WheelTemplateRenderer(wt).generate_svg(png="PIL", color_errors=True)
+        is_custom_template = False
 
     with gr.Blocks(css=CSS, analytics_enabled=standalone) as ui:
-        user_state = gr.State(value={"test": 1234})
+        user_state = gr.State(value={"custom_template": is_custom_template})
         with gr.Row(variant="compact").style(equal_height=False):
             with gr.Column():
                 with gr.Row(variant="compact").style(equal_height=False):
@@ -617,28 +626,38 @@ def init_gradio_ui_v2(standalone=False):
                         rim_width = gr.Slider(0.1, 49, step=0.1, value=ts_cfg["rim_width"], label='Rim width ["]')
                         hub_diam = gr.Slider(5, 48, step=0.1, value=ts_cfg["hub_diameter"], label='Hub diameter ["]')
                         hub_width = gr.Slider(1, 47, step=0.1, value=ts_cfg["hub_width"], label='Hub width ["]')
-                        nut_diam = gr.Slider(1, 4, step=0.01, value=ts_cfg["lug_nut_diameter"], label='Lug nut diameter ["]')
+                        nut_diam = gr.Slider(0.6, 4, step=0.01, value=ts_cfg["lug_nut_diameter"], label='Lug nut diameter ["]')
                         bolt_circle_diam = gr.Slider(2, 40, step=0.1,
                                                      value=ts_cfg["bolt_circle_diameter"], label='Bolt circle diameter ["]')
 
                     with gr.Column():
-                        spoke_angle = gr.Slider(5, 70, step=0.1, value=ts_cfg["spoke_central_angle"],
+                        spoke_central_angle = gr.Slider(5, 70, step=0.1, value=ts_cfg["spoke_central_angle"],
                                                 label='Spoke central angle')
                         spoke_count = gr.Slider(3, 9, step=1, value=ts_cfg["spoke_count"], label='Spoke count')
+                        spoke0_angle = gr.Slider(0, 360.0, step=1, value=ts_cfg["spokes_init_angle"], label='Spokes initial angle')
                         nut_count = gr.Slider(3, 9, step=1, value=ts_cfg["lug_nut_count"], label='Lug nut count')
+                        nut0_angle = gr.Slider(0, 360.0, step=1, value=ts_cfg["lug_nuts_init_angle"], label='Lug nuts initial angle')
                         req_coverage_area = gr.Slider(0, 100, value=ts_cfg["required_coverage_area"], step=1,
                                                       label='Requested coverage area [%]', visible=False)
                         # TODO: Calc real coverage area from defaults, if applicable
                         real_coverage_area = gr.Slider(0, 100, value=0.0, step=0.1, interactive=False,
                                                        label='Actual coverage area [%]')
-                        with gr.Row(variant="compact").style():
-                            live_update_switch = gr.Checkbox(value=False, label="Live preview")
-                            make_template_btn = gr.Button("Preview template")
+                        # with gr.Row(variant="compact").style():
+                            # live_update_switch = gr.Checkbox(value=False, label="Live preview")
+                            # make_template_btn = gr.Button("Preview template")
 
                 with gr.Row(variant="compact").style(equal_height=False):
-                    template_image = gr.Image(initial_template_image, type="pil", interactive=True)
-                    template_image.style(width=400, height=400)
-                with gr.Row(variant="compact").style(equal_height=False):
+                    with gr.Column(scale=1):    
+                        with gr.Row(variant="compact").style(equal_height=True):
+                            make_template_btn = ToolButton(value="\U0001F441\U0000fe0f", elem_id='make_template_button')
+                            
+                            live_update_switch = gr.CheckboxGroup(["Live update"], show_label=False)
+                            # make_template_btn = gr.Button("Render", scale=1, min_width=50)
+                            
+                    with gr.Column(scale=2):
+                        template_image = gr.Image(initial_template_image, type="pil", interactive=True)
+                        template_image.style(height=350)                                            
+                with gr.Row(variant="compact").style(equal_height=True):
                     # load_template_btn = gr.UploadButton("Load template", file_types=[".json"], file_count="single",
                     #                                     type="bytes")
                     template_name = gr.Textbox(value="", label='Template Name', max_lines=1, show_label=True,
@@ -774,8 +793,8 @@ def init_gradio_ui_v2(standalone=False):
             live_update_switch,
             rim_diam, rim_width,
             hub_diam, hub_width,
-            nut_count, nut_diam, bolt_circle_diam,
-            spoke_count, spoke_angle,
+            nut_count, nut_diam, nut0_angle, bolt_circle_diam,
+            spoke_count, spoke_central_angle, spoke0_angle,
             req_coverage_area, canvas_width, canvas_height
         ]
         NUM_TEMPLATE_INPUTS = len(template_inputs) - 1  # Omit the live_update_switch
